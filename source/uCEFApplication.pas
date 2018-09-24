@@ -61,13 +61,13 @@ uses
 const
   CEF_SUPPORTED_VERSION_MAJOR   = 3;
   CEF_SUPPORTED_VERSION_MINOR   = 3497;
-  CEF_SUPPORTED_VERSION_RELEASE = 1829;
+  CEF_SUPPORTED_VERSION_RELEASE = 1833;
   CEF_SUPPORTED_VERSION_BUILD   = 0;
 
   CEF_CHROMEELF_VERSION_MAJOR   = 69;
   CEF_CHROMEELF_VERSION_MINOR   = 0;
   CEF_CHROMEELF_VERSION_RELEASE = 3497;
-  CEF_CHROMEELF_VERSION_BUILD   = 81;
+  CEF_CHROMEELF_VERSION_BUILD   = 100;
 
   LIBCEF_DLL                    = 'libcef.dll';
   CHROMEELF_DLL                 = 'chrome_elf.dll';
@@ -1100,7 +1100,7 @@ begin
 
     TempOldDir := ExcludeTrailingPathDelimiter(aDirectory);
 
-    if (Pos(PathDelim, TempOldDir, 1) > 0) and
+    if (Pos(PathDelim, TempOldDir {$IFNDEF FPC}, 1{$ENDIF}) > 0) and
        (length(ExtractFileName(TempOldDir)) > 0) then
       begin
         i := 0;
@@ -2315,7 +2315,8 @@ end;
 
 procedure TCEFDirectoryDeleterThread.Execute;
 begin
-  try
+
+  try
     {$IFDEF DELPHI14_UP}
     TDirectory.Delete(FDirectory, True);
     {$ELSE}
