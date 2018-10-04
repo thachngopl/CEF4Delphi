@@ -61,7 +61,7 @@ uses
 const
   CEF_SUPPORTED_VERSION_MAJOR   = 3;
   CEF_SUPPORTED_VERSION_MINOR   = 3497;
-  CEF_SUPPORTED_VERSION_RELEASE = 1833;
+  CEF_SUPPORTED_VERSION_RELEASE = 1836;
   CEF_SUPPORTED_VERSION_BUILD   = 0;
 
   CEF_CHROMEELF_VERSION_MAJOR   = 69;
@@ -138,6 +138,7 @@ type
       FAppSettings                   : TCefSettings;
       FDeviceScaleFactor             : single;
       FCheckDevToolsResources        : boolean;
+      FDisableExtensions             : boolean;
       FDisableGPUCache               : boolean;
       FStatus                        : TCefAplicationStatus;
       FMissingLibFiles               : string;
@@ -355,6 +356,7 @@ type
       property ReRaiseExceptions                 : boolean                             read FReRaiseExceptions                 write FReRaiseExceptions;
       property DeviceScaleFactor                 : single                              read FDeviceScaleFactor;
       property CheckDevToolsResources            : boolean                             read FCheckDevToolsResources            write FCheckDevToolsResources;
+      property DisableExtensions                 : boolean                             read FDisableExtensions                 write FDisableExtensions;
       property LocalesRequired                   : ustring                             read FLocalesRequired                   write FLocalesRequired;
       property CustomFlashPath                   : ustring                             read FCustomFlashPath                   write FCustomFlashPath;
       property ProcessType                       : TCefProcessType                     read FProcessType;
@@ -507,6 +509,7 @@ begin
   FSetCurrentDir                 := False;
   FGlobalContextInitialized      := False;
   FCheckDevToolsResources        := True;
+  FDisableExtensions             := False;
   FDisableGPUCache               := True;
   FLocalesRequired               := '';
   FProcessType                   := ParseProcessType;
@@ -814,7 +817,7 @@ begin
         end;
 
       TempMissingFrm := not(CheckDLLs(FFrameworkDirPath, FMissingLibFiles));
-      TempMissingRsc := not(CheckResources(FResourcesDirPath, FMissingLibFiles, FCheckDevToolsResources));
+      TempMissingRsc := not(CheckResources(FResourcesDirPath, FMissingLibFiles, FCheckDevToolsResources, not(FDisableExtensions)));
       TempMissingLoc := not(CheckLocales(FLocalesDirPath, FMissingLibFiles, FLocalesRequired));
 
       if TempMissingFrm or TempMissingRsc or TempMissingLoc then
@@ -855,6 +858,7 @@ begin
                   if not(Is32BitProcess) then
                     Result := True
                    else
+
                     begin
                       FStatus    := asErrorDLLVersion;
                       TempString := 'Wrong CEF3 binaries !' +
@@ -1100,7 +1104,7 @@ begin
 
     TempOldDir := ExcludeTrailingPathDelimiter(aDirectory);
 
-    if (Pos(PathDelim, TempOldDir {$IFNDEF FPC}, 1{$ENDIF}) > 0) and
+    if (Pos(PathDelim, TempOldDir) > 0) and
        (length(ExtractFileName(TempOldDir)) > 0) then
       begin
         i := 0;
@@ -1433,6 +1437,9 @@ begin
 
       if FSitePerProcess then
         commandLine.AppendSwitch('--site-per-process');
+
+      if FDisableExtensions then
+        commandLine.AppendSwitch('--disable-extensions');
 
       if (FCustomCommandLines       <> nil) and
          (FCustomCommandLineValues  <> nil) and
