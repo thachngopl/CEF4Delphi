@@ -49,7 +49,8 @@ uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics,
   Controls, Forms, Dialogs, StdCtrls, ExtCtrls,
   {$ENDIF}
-  uCEFChromium, uCEFWindowParent, uCEFInterfaces, uCEFConstants, uCEFTypes;
+  uCEFChromium, uCEFWindowParent, uCEFInterfaces, uCEFConstants, uCEFTypes,
+  uCEFWinControl;
 
 type
   TForm1 = class(TForm)
@@ -102,7 +103,7 @@ implementation
 {$R *.dfm}
 
 uses
-  uCEFApplication;
+  uCEFApplication, uCefMiscFunctions;
 
 // This is a demo with the simplest web browser you can build using CEF4Delphi and
 // it doesn't show any sign of progress like other web browsers do.
@@ -117,6 +118,12 @@ uses
 // another domain which will take a little time too.
 
 // This demo uses a TChromium and a TCEFWindowParent
+
+// Destruction steps
+// =================
+// 1. FormCloseQuery sets CanClose to FALSE calls TChromium.CloseBrowser which triggers the TChromium.OnClose event.
+// 2. TChromium.OnClose sends a CEFBROWSER_DESTROY message to destroy CEFWindowParent1 in the main thread, which triggers the TChromium.OnBeforeClose event.
+// 3. TChromium.OnBeforeClose sets FCanClose := True and sends WM_CLOSE to the form.
 
 procedure TForm1.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
 begin
@@ -134,6 +141,7 @@ procedure TForm1.FormCreate(Sender: TObject);
 begin
   FCanClose := False;
   FClosing  := False;
+  Chromium1.DefaultURL := AddressEdt.Text;
 end;
 
 procedure TForm1.FormShow(Sender: TObject);
@@ -183,7 +191,6 @@ procedure TForm1.BrowserCreatedMsg(var aMessage : TMessage);
 begin
   Caption            := 'Simple Browser 2';
   AddressPnl.Enabled := True;
-  GoBtn.Click;
 end;
 
 procedure TForm1.BrowserDestroyMsg(var aMessage : TMessage);

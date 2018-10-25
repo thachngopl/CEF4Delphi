@@ -61,7 +61,7 @@ uses
 const
   CEF_SUPPORTED_VERSION_MAJOR   = 3;
   CEF_SUPPORTED_VERSION_MINOR   = 3497;
-  CEF_SUPPORTED_VERSION_RELEASE = 1836;
+  CEF_SUPPORTED_VERSION_RELEASE = 1841;
   CEF_SUPPORTED_VERSION_BUILD   = 0;
 
   CEF_CHROMEELF_VERSION_MAJOR   = 69;
@@ -128,6 +128,7 @@ type
       FSitePerProcess                : boolean;
       FDisableWebSecurity            : boolean;
       FDisablePDFExtension           : boolean;
+      FLogProcessInfo                : boolean;
       FChromeVersionInfo             : TFileVersionInfo;
       {$IFDEF FPC}
       FLibHandle                     : TLibHandle;
@@ -195,6 +196,10 @@ type
       function  GetMustCreateRenderProcessHandler : boolean;
       function  GetGlobalContextInitialized : boolean;
       function  GetChildProcessesCount : integer;
+      function  GetUsedMemory : cardinal;
+      function  GetTotalSystemMemory : uint64;
+      function  GetAvailableSystemMemory : uint64;
+      function  GetSystemMemoryLoad : cardinal;
 
       function  LoadCEFlibrary : boolean; virtual;
       function  Load_cef_app_capi_h : boolean;
@@ -353,6 +358,7 @@ type
       property SitePerProcess                    : boolean                             read FSitePerProcess                    write FSitePerProcess;
       property DisableWebSecurity                : boolean                             read FDisableWebSecurity                write FDisableWebSecurity;
       property DisablePDFExtension               : boolean                             read FDisablePDFExtension               write FDisablePDFExtension;
+      property LogProcessInfo                    : boolean                             read FLogProcessInfo                    write FLogProcessInfo;
       property ReRaiseExceptions                 : boolean                             read FReRaiseExceptions                 write FReRaiseExceptions;
       property DeviceScaleFactor                 : single                              read FDeviceScaleFactor;
       property CheckDevToolsResources            : boolean                             read FCheckDevToolsResources            write FCheckDevToolsResources;
@@ -371,6 +377,10 @@ type
       property MustFreeLibrary                   : boolean                             read FMustFreeLibrary                   write FMustFreeLibrary;
       property AutoplayPolicy                    : TCefAutoplayPolicy                  read FAutoplayPolicy                    write FAutoplayPolicy;
       property ChildProcessesCount               : integer                             read GetChildProcessesCount;
+      property UsedMemory                        : cardinal                            read GetUsedMemory;
+      property TotalSystemMemory                 : uint64                              read GetTotalSystemMemory;
+      property AvailableSystemMemory             : uint64                              read GetAvailableSystemMemory;
+      property SystemMemoryLoad                  : cardinal                            read GetSystemMemoryLoad;
 
       property OnRegCustomSchemes                : TOnRegisterCustomSchemesEvent       read FOnRegisterCustomSchemes           write FOnRegisterCustomSchemes;
 
@@ -430,13 +440,13 @@ implementation
 
 uses
   {$IFDEF DELPHI16_UP}
-  System.Math, System.IOUtils, System.SysUtils, {$IFDEF MSWINDOWS}WinApi.TlHelp32,{$ENDIF}
+  System.Math, System.IOUtils, System.SysUtils, {$IFDEF MSWINDOWS}WinApi.TlHelp32, PSAPI,{$ENDIF}
   {$ELSE}
     Math, {$IFDEF DELPHI14_UP}IOUtils,{$ENDIF} SysUtils,
     {$IFDEF FPC}
-      {$IFDEF MSWINDOWS}jwatlhelp32,{$ENDIF}
+      {$IFDEF MSWINDOWS}jwatlhelp32, jwapsapi,{$ENDIF}
     {$ELSE}
-      TlHelp32,
+      TlHelp32, {$IFDEF MSWINDOWS}PSAPI,{$ENDIF}
     {$ENDIF}
   {$ENDIF}
   uCEFLibFunctions, uCEFMiscFunctions, uCEFCommandLine, uCEFConstants,
@@ -503,6 +513,7 @@ begin
   FSitePerProcess                := True;
   FDisableWebSecurity            := False;
   FDisablePDFExtension           := False;
+  FLogProcessInfo                := False;
   FReRaiseExceptions             := False;
   FLibLoaded                     := False;
   FShowMessageDlg                := True;
@@ -716,20 +727,13 @@ begin
 end;
 
 procedure TCefApplication.SetBrowserSubprocessPath(const aValue : ustring);
-var
-  TempPath : string;
 begin
   if (length(aValue) > 0) then
     begin
       if CustomPathIsRelative(aValue) then
-        TempPath := GetModulePath + aValue
+        FBrowserSubprocessPath := GetModulePath + aValue
        else
-        TempPath := aValue;
-
-      if FileExists(TempPath) then
-        FBrowserSubprocessPath := TempPath
-       else
-        FBrowserSubprocessPath := '';
+        FBrowserSubprocessPath := aValue;
     end
    else
     FBrowserSubprocessPath := '';
@@ -800,7 +804,7 @@ end;
 function TCefApplication.CheckCEFLibrary : boolean;
 var
   TempString, TempOldDir : string;
-  TempMissingFrm, TempMissingRsc, TempMissingLoc : boolean;
+  TempMissingFrm, TempMissingRsc, TempMissingLoc, TempMissingSubProc : boolean;
   TempMachine : integer;
   TempVersionInfo : TFileVersionInfo;
 begin
@@ -816,11 +820,12 @@ begin
           chdir(GetModulePath);
         end;
 
-      TempMissingFrm := not(CheckDLLs(FFrameworkDirPath, FMissingLibFiles));
-      TempMissingRsc := not(CheckResources(FResourcesDirPath, FMissingLibFiles, FCheckDevToolsResources, not(FDisableExtensions)));
-      TempMissingLoc := not(CheckLocales(FLocalesDirPath, FMissingLibFiles, FLocalesRequired));
+      TempMissingSubProc := not(CheckSubprocessPath(FBrowserSubprocessPath, FMissingLibFiles));
+      TempMissingFrm     := not(CheckDLLs(FFrameworkDirPath, FMissingLibFiles));
+      TempMissingRsc     := not(CheckResources(FResourcesDirPath, FMissingLibFiles, FCheckDevToolsResources, not(FDisableExtensions)));
+      TempMissingLoc     := not(CheckLocales(FLocalesDirPath, FMissingLibFiles, FLocalesRequired));
 
-      if TempMissingFrm or TempMissingRsc or TempMissingLoc then
+      if TempMissingFrm or TempMissingRsc or TempMissingLoc or TempMissingSubProc then
         begin
           FStatus    := asErrorMissingFiles;
           TempString := 'CEF3 binaries missing !';
@@ -1522,7 +1527,10 @@ begin
   Result := 0;
 
 {$IFDEF MSWINDOWS}
-  TempHandle         := CreateToolHelp32SnapShot(TH32CS_SNAPPROCESS, 0);
+  TempHandle := CreateToolHelp32SnapShot(TH32CS_SNAPPROCESS, 0);
+  if (TempHandle = INVALID_HANDLE_VALUE) then exit;
+
+  ZeroMemory(@TempProcess, SizeOf(TProcessEntry32));
   TempProcess.dwSize := Sizeof(TProcessEntry32);
   TempPID            := GetCurrentProcessID;
   TempMain           := ExtractFileName(paramstr(0));
@@ -1545,6 +1553,109 @@ begin
 
   CloseHandle(TempHandle);
 {$ENDIF}
+end;
+
+function TCefApplication.GetUsedMemory : cardinal;
+{$IFDEF MSWINDOWS}
+var
+  TempHandle   : THandle;
+  TempProcess  : TProcessEntry32;
+  TempPID      : DWORD;
+  TempProcHWND : HWND;
+  TempMemCtrs  : TProcessMemoryCounters;
+  TempMain, TempSubProc, TempName : string;
+{$ENDIF}
+begin
+  Result := 0;
+
+{$IFDEF MSWINDOWS}
+  TempHandle := CreateToolHelp32SnapShot(TH32CS_SNAPPROCESS, 0);
+  if (TempHandle = INVALID_HANDLE_VALUE) then exit;
+
+  ZeroMemory(@TempProcess, SizeOf(TProcessEntry32));
+  TempProcess.dwSize := Sizeof(TProcessEntry32);
+  TempPID            := GetCurrentProcessID;
+  TempMain           := ExtractFileName(paramstr(0));
+  TempSubProc        := ExtractFileName(FBrowserSubprocessPath);
+
+  Process32First(TempHandle, TempProcess);
+
+  repeat
+    if (TempProcess.th32ProcessID       = TempPID) or
+       (TempProcess.th32ParentProcessID = TempPID) then
+      begin
+        TempName := TempProcess.szExeFile;
+        TempName := ExtractFileName(TempName);
+
+        if (CompareText(TempName, TempMain) = 0) or
+           ((length(TempSubProc) > 0) and (CompareText(TempName, TempSubProc) = 0)) then
+          begin
+            TempProcHWND := OpenProcess(PROCESS_QUERY_INFORMATION or PROCESS_VM_READ, False, TempProcess.th32ProcessID);
+
+            if (TempProcHWND <> 0) then
+              begin
+                ZeroMemory(@TempMemCtrs, SizeOf(TProcessMemoryCounters));
+                TempMemCtrs.cb := SizeOf(TProcessMemoryCounters);
+
+                {$IFDEF FPC}
+                if GetProcessMemoryInfo(TempProcHWND, TempMemCtrs, TempMemCtrs.cb) then inc(Result, TempMemCtrs.WorkingSetSize);
+                {$ELSE}
+                if GetProcessMemoryInfo(TempProcHWND, @TempMemCtrs, TempMemCtrs.cb) then inc(Result, TempMemCtrs.WorkingSetSize);
+                {$ENDIF}
+
+                CloseHandle(TempProcHWND);
+              end;
+          end;
+      end;
+  until not(Process32Next(TempHandle, TempProcess));
+
+  CloseHandle(TempHandle);
+{$ENDIF}
+end;
+
+function TCefApplication.GetTotalSystemMemory : uint64;
+{$IFDEF MSWINDOWS}
+var
+  TempMemStatus : TMyMemoryStatusEx;
+{$ENDIF}
+begin
+  Result := 0;
+
+  {$IFDEF MSWINDOWS}
+  ZeroMemory(@TempMemStatus, SizeOf(TMyMemoryStatusEx));
+  TempMemStatus.dwLength := SizeOf(TMyMemoryStatusEx);
+  if GetGlobalMemoryStatusEx(TempMemStatus) then Result := TempMemStatus.ullTotalPhys;
+  {$ENDIF}
+end;
+
+function TCefApplication.GetAvailableSystemMemory : uint64;
+{$IFDEF MSWINDOWS}
+var
+  TempMemStatus : TMyMemoryStatusEx;
+{$ENDIF}
+begin
+  Result := 0;
+
+  {$IFDEF MSWINDOWS}
+  ZeroMemory(@TempMemStatus, SizeOf(TMyMemoryStatusEx));
+  TempMemStatus.dwLength := SizeOf(TMyMemoryStatusEx);
+  if GetGlobalMemoryStatusEx(TempMemStatus) then Result := TempMemStatus.ullAvailPhys;
+  {$ENDIF}
+end;
+
+function TCefApplication.GetSystemMemoryLoad : cardinal;
+{$IFDEF MSWINDOWS}
+var
+  TempMemStatus : TMyMemoryStatusEx;
+{$ENDIF}
+begin
+  Result := 0;
+
+  {$IFDEF MSWINDOWS}
+  ZeroMemory(@TempMemStatus, SizeOf(TMyMemoryStatusEx));
+  TempMemStatus.dwLength := SizeOf(TMyMemoryStatusEx);
+  if GetGlobalMemoryStatusEx(TempMemStatus) then Result := TempMemStatus.dwMemoryLoad;
+  {$ENDIF}
 end;
 
 function TCefApplication.LoadCEFlibrary : boolean;
@@ -1639,6 +1750,7 @@ begin
       FLibLoaded := True;
       Result     := True;
 
+      if FLogProcessInfo       then CefDebugLog('Process started', CEF_LOG_SEVERITY_INFO);
       if FEnableHighDPISupport then cef_enable_highdpi_support();
     end
    else

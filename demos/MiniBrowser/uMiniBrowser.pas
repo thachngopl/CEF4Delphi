@@ -50,7 +50,8 @@ uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Menus,
   Controls, Forms, Dialogs, StdCtrls, ExtCtrls, Types, ComCtrls, ClipBrd, AppEvnts, ActiveX, ShlObj,
   {$ENDIF}
-  uCEFChromium, uCEFWindowParent, uCEFInterfaces, uCEFApplication, uCEFTypes, uCEFConstants;
+  uCEFChromium, uCEFWindowParent, uCEFInterfaces, uCEFApplication, uCEFTypes, uCEFConstants,
+  uCEFWinControl;
 
 const
   MINIBROWSER_SHOWDEVTOOLS    = WM_APP + $101;
@@ -115,6 +116,8 @@ type
     Resolvehost1: TMenuItem;
     Timer1: TTimer;
     OpenfilewithaDAT1: TMenuItem;
+    N5: TMenuItem;
+    Memoryinfo1: TMenuItem;
     procedure FormShow(Sender: TObject);
     procedure BackBtnClick(Sender: TObject);
     procedure ForwardBtnClick(Sender: TObject);
@@ -197,6 +200,7 @@ type
     procedure OpenfilewithaDAT1Click(Sender: TObject);
     procedure Chromium1LoadEnd(Sender: TObject; const browser: ICefBrowser;
       const frame: ICefFrame; httpStatusCode: Integer);
+    procedure Memoryinfo1Click(Sender: TObject);
 
   protected
     FResponse : TStringList;
@@ -740,6 +744,20 @@ begin
     end;
 end;
 
+procedure TMiniBrowserFrm.Memoryinfo1Click(Sender: TObject);
+const
+  BYTES_PER_MEGABYTE = 1024 * 1024;
+var
+  TempMessage : string;
+begin
+  TempMessage := 'Total memory used by this application : ' + inttostr(GlobalCEFApp.UsedMemory div BYTES_PER_MEGABYTE) + ' Mb' + CRLF +
+                 'Total system memory : ' +  inttostr(GlobalCEFApp.TotalSystemMemory div BYTES_PER_MEGABYTE) + ' Mb' + CRLF +
+                 'Available physical memory : ' + inttostr(GlobalCEFApp.AvailableSystemMemory div BYTES_PER_MEGABYTE) + ' Mb' + CRLF +
+                 'Memory load : ' + inttostr(GlobalCEFApp.SystemMemoryLoad) + ' %';
+
+  MessageDlg(TempMessage, mtInformation, [mbOK], 0);
+end;
+
 procedure TMiniBrowserFrm.Chromium1ResourceResponse(Sender: TObject;
   const browser: ICefBrowser; const frame: ICefFrame;
   const request: ICefRequest; const response: ICefResponse;
@@ -803,6 +821,7 @@ begin
   FClosing  := False;
   FResponse := TStringList.Create;
   FRequest  := TStringList.Create;
+  Chromium1.DefaultURL := MINIBROWSER_HOMEPAGE;
 end;
 
 procedure TMiniBrowserFrm.FormDestroy(Sender: TObject);
@@ -837,8 +856,6 @@ procedure TMiniBrowserFrm.BrowserCreatedMsg(var aMessage : TMessage);
 begin
   CEFWindowParent1.UpdateSize;
   NavControlPnl.Enabled := True;
-  AddURL(MINIBROWSER_HOMEPAGE);
-  Chromium1.LoadURL(MINIBROWSER_HOMEPAGE);
 end;
 
 procedure TMiniBrowserFrm.BrowserDestroyMsg(var aMessage : TMessage);
