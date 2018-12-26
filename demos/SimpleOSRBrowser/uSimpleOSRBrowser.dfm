@@ -52,7 +52,6 @@ object Form1: TForm1
           't_form'
         'https://www.briskbard.com'
         'https://frames-per-second.appspot.com/')
-      ExplicitWidth = 875
     end
     object Panel2: TPanel
       Left = 914
@@ -100,7 +99,6 @@ object Form1: TForm1
         TabOrder = 1
         OnClick = SnapshotBtnClick
         OnEnter = SnapshotBtnEnter
-        ExplicitLeft = 72
       end
     end
   end
@@ -121,7 +119,6 @@ object Form1: TForm1
     OnMouseUp = Panel1MouseUp
     OnResize = Panel1Resize
     OnMouseLeave = Panel1MouseLeave
-    ExplicitHeight = 458
   end
   object chrmosr: TChromium
     OnTooltip = chrmosrTooltip

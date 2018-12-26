@@ -58,14 +58,14 @@ uses
 
 const
   CEF_SUPPORTED_VERSION_MAJOR   = 3;
-  CEF_SUPPORTED_VERSION_MINOR   = 3538;
-  CEF_SUPPORTED_VERSION_RELEASE = 1852;
+  CEF_SUPPORTED_VERSION_MINOR   = 3578;
+  CEF_SUPPORTED_VERSION_RELEASE = 1860;
   CEF_SUPPORTED_VERSION_BUILD   = 0;
 
-  CEF_CHROMEELF_VERSION_MAJOR   = 70;
+  CEF_CHROMEELF_VERSION_MAJOR   = 71;
   CEF_CHROMEELF_VERSION_MINOR   = 0;
-  CEF_CHROMEELF_VERSION_RELEASE = 3538;
-  CEF_CHROMEELF_VERSION_BUILD   = 102;
+  CEF_CHROMEELF_VERSION_RELEASE = 3578;
+  CEF_CHROMEELF_VERSION_BUILD   = 80;
 
   LIBCEF_DLL                    = 'libcef.dll';
   CHROMEELF_DLL                 = 'chrome_elf.dll';
@@ -894,9 +894,10 @@ begin
                            CEF_SUPPORTED_VERSION_RELEASE,
                            CEF_SUPPORTED_VERSION_BUILD) then
           begin
+            {$IFDEF MSWINDOWS}
             if GetDLLHeaderMachine(LibCefPath, TempMachine) then
               case TempMachine of
-                IMAGE_FILE_MACHINE_I386 :
+                CEF_IMAGE_FILE_MACHINE_I386 :
                   if Is32BitProcess then
                     Result := True
                    else
@@ -909,7 +910,7 @@ begin
                       ShowErrorMessageDlg(TempString);
                     end;
 
-                IMAGE_FILE_MACHINE_AMD64 :
+                CEF_IMAGE_FILE_MACHINE_AMD64 :
                   if not(Is32BitProcess) then
                     Result := True
                    else
@@ -936,6 +937,9 @@ begin
               end
              else
               Result := True;
+            {$ELSE}
+            Result := True;
+            {$ENDIF}
           end
          else
           begin

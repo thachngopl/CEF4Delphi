@@ -400,16 +400,11 @@ const
   CEF4DELPHI_URL = 'https://github.com/salvadordf/CEF4Delphi';
   CRLF           = #13 + #10;
 
-  IMAGE_FILE_MACHINE_UNKNOWN  = 0;
-  IMAGE_FILE_MACHINE_I386     = $014c; // Intel x86
-  IMAGE_FILE_MACHINE_IA64     = $0200; // Intel Itanium Processor Family (IPF)
-  IMAGE_FILE_MACHINE_AMD64    = $8664; // x64 (AMD64 or EM64T)
-  IMAGE_FILE_MACHINE_R3000_BE = $160;  // MIPS big-endian
-  IMAGE_FILE_MACHINE_R3000    = $162;  // MIPS little-endian, 0x160 big-endian
-  IMAGE_FILE_MACHINE_R4000    = $166;  // MIPS little-endian
-  IMAGE_FILE_MACHINE_R10000   = $168;  // MIPS little-endian
-  IMAGE_FILE_MACHINE_ALPHA    = $184;  // Alpha_AXP }
-  IMAGE_FILE_MACHINE_POWERPC  = $1F0;  // IBM PowerPC Little-Endian
+  // These contants are declared in the "Windows" unit but
+  // some old Delphi versions don't have them.
+  // We have to add "CEF_" to be compatible with C++ Builder.
+  CEF_IMAGE_FILE_MACHINE_I386  = $014C;
+  CEF_IMAGE_FILE_MACHINE_AMD64 = $8664;
 
 implementation
 

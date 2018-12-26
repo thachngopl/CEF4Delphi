@@ -153,6 +153,9 @@ object MiniBrowserFrm: TMiniBrowserFrm
           
             'https://www.w3schools.com/Tags/tryit.asp?filename=tryhtml_iframe' +
             '_name'
+          
+            'http://www-db.deis.unibo.it/courses/TW/DOCS/w3schools/html/tryit' +
+            '.asp-filename=tryhtml5_html_manifest.html'
           'https://www.browserleaks.com/webrtc'
           'https://frames-per-second.appspot.com/'
           'chrome://version/'
@@ -258,6 +261,7 @@ object MiniBrowserFrm: TMiniBrowserFrm
     OnResolvedHostAvailable = Chromium1ResolvedHostAvailable
     OnRenderCompMsg = Chromium1RenderCompMsg
     OnLoadEnd = Chromium1LoadEnd
+    OnLoadError = Chromium1LoadError
     OnLoadingStateChange = Chromium1LoadingStateChange
     OnBeforeContextMenu = Chromium1BeforeContextMenu
     OnContextMenuCommand = Chromium1ContextMenuCommand
@@ -275,6 +279,7 @@ object MiniBrowserFrm: TMiniBrowserFrm
     OnClose = Chromium1Close
     OnBeforeResourceLoad = Chromium1BeforeResourceLoad
     OnResourceResponse = Chromium1ResourceResponse
+    OnCertificateError = Chromium1CertificateError
     Left = 32
     Top = 224
   end
