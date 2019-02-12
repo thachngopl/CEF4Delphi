@@ -141,6 +141,7 @@ object MiniBrowserFrm: TMiniBrowserFrm
           'http://www.adobe.com/software/flash/about/'
           'http://isflashinstalled.com/'
           'http://html5test.com/'
+          'https://test.webrtc.org/'
           'https://www.w3schools.com/'
           'http://webglsamples.org/'
           'https://get.webgl.org/'
@@ -259,6 +260,7 @@ object MiniBrowserFrm: TMiniBrowserFrm
     OnPdfPrintFinished = Chromium1PdfPrintFinished
     OnPrefsAvailable = Chromium1PrefsAvailable
     OnResolvedHostAvailable = Chromium1ResolvedHostAvailable
+    OnNavigationVisitorResultAvailable = Chromium1NavigationVisitorResultAvailable
     OnRenderCompMsg = Chromium1RenderCompMsg
     OnLoadEnd = Chromium1LoadEnd
     OnLoadError = Chromium1LoadError
