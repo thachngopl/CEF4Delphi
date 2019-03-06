@@ -59,13 +59,13 @@ uses
 const
   CEF_SUPPORTED_VERSION_MAJOR   = 3;
   CEF_SUPPORTED_VERSION_MINOR   = 3626;
-  CEF_SUPPORTED_VERSION_RELEASE = 1881;
+  CEF_SUPPORTED_VERSION_RELEASE = 1894;
   CEF_SUPPORTED_VERSION_BUILD   = 0;
 
   CEF_CHROMEELF_VERSION_MAJOR   = 72;
   CEF_CHROMEELF_VERSION_MINOR   = 0;
   CEF_CHROMEELF_VERSION_RELEASE = 3626;
-  CEF_CHROMEELF_VERSION_BUILD   = 81;
+  CEF_CHROMEELF_VERSION_BUILD   = 96;
 
   {$IFDEF MSWINDOWS}
   LIBCEF_DLL                    = 'libcef.dll';
@@ -114,6 +114,8 @@ type
       FCustomCommandLines            : TStringList;
       FCustomCommandLineValues       : TStringList;
       FFlashEnabled                  : boolean;
+      //FEnableMediaStream             : boolean;
+      //FEnableSpeechInput             : boolean;
       FEnableGPU                     : boolean;
       FCheckCEFFiles                 : boolean;
       FLibLoaded                     : boolean;
@@ -152,6 +154,8 @@ type
       FAutoplayPolicy                : TCefAutoplayPolicy;
       FDisableBackgroundNetworking   : boolean;
       FMetricsRecordingOnly          : boolean;
+      FAllowFileAccessFromFiles      : boolean;
+      FAllowRunningInsecureContent   : boolean;
 
       FMustCreateResourceBundleHandler : boolean;
       FMustCreateBrowserProcessHandler : boolean;
@@ -352,6 +356,8 @@ type
       property DeleteCache                       : boolean                             read FDeleteCache                       write FDeleteCache;
       property DeleteCookies                     : boolean                             read FDeleteCookies                     write FDeleteCookies;
       property FlashEnabled                      : boolean                             read FFlashEnabled                      write FFlashEnabled;
+      //property EnableMediaStream                 : boolean                             read FEnableMediaStream                 write FEnableMediaStream;
+      //property EnableSpeechInput                 : boolean                             read FEnableSpeechInput                 write FEnableSpeechInput;
       property EnableGPU                         : boolean                             read FEnableGPU                         write FEnableGPU;
       property CheckCEFFiles                     : boolean                             read FCheckCEFFiles                     write FCheckCEFFiles;
       property ShowMessageDlg                    : boolean                             read FShowMessageDlg                    write FShowMessageDlg;
@@ -396,6 +402,8 @@ type
       property AutoplayPolicy                    : TCefAutoplayPolicy                  read FAutoplayPolicy                    write FAutoplayPolicy;
       property DisableBackgroundNetworking       : boolean                             read FDisableBackgroundNetworking       write FDisableBackgroundNetworking;
       property MetricsRecordingOnly              : boolean                             read FMetricsRecordingOnly              write FMetricsRecordingOnly;
+      property AllowFileAccessFromFiles          : boolean                             read FAllowFileAccessFromFiles          write FAllowFileAccessFromFiles;
+      property AllowRunningInsecureContent       : boolean                             read FAllowRunningInsecureContent       write FAllowRunningInsecureContent;
       property ChildProcessesCount               : integer                             read GetChildProcessesCount;
       property UsedMemory                        : cardinal                            read GetUsedMemory;
       property TotalSystemMemory                 : uint64                              read GetTotalSystemMemory;
@@ -524,6 +532,8 @@ begin
   FDeleteCache                   := False;
   FDeleteCookies                 := False;
   FFlashEnabled                  := True;
+  //FEnableMediaStream             := True;
+  //FEnableSpeechInput             := True;
   FEnableGPU                     := False;
   FCustomCommandLines            := nil;
   FCustomCommandLineValues       := nil;
@@ -555,6 +565,8 @@ begin
   FAutoplayPolicy                := appDefault;
   FDisableBackgroundNetworking   := False;
   FMetricsRecordingOnly          := False;
+  FAllowFileAccessFromFiles      := False;
+  FAllowRunningInsecureContent   := False;
 
   FMustCreateResourceBundleHandler := False;
   FMustCreateBrowserProcessHandler := True;
@@ -1474,6 +1486,10 @@ begin
             commandLine.AppendSwitch('--enable-system-flash');
           end;
 
+      // These switches appear in the CEF3 source but they didn't seem to do anything in last tests
+      //
+      //commandLine.AppendSwitchWithValue('--enable-media-stream', IntToStr(Ord(FEnableMediaStream)));
+      //commandLine.AppendSwitchWithValue('--enable-speech-input', IntToStr(Ord(FEnableSpeechInput)));
 
       if not(FEnableGPU) then
         begin
@@ -1536,6 +1552,12 @@ begin
 
       if FMetricsRecordingOnly then
         commandLine.AppendSwitch('--metrics-recording-only');
+
+      if FAllowFileAccessFromFiles then
+        commandLine.AppendSwitch('--allow-file-access-from-files');
+
+      if FAllowRunningInsecureContent then
+        commandLine.AppendSwitch('--allow-running-insecure-content');
 
       if (FCustomCommandLines       <> nil) and
          (FCustomCommandLineValues  <> nil) and
