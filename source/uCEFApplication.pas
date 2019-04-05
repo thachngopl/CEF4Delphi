@@ -50,22 +50,25 @@ interface
 
 uses
   {$IFDEF DELPHI16_UP}
-    {$IFDEF MSWINDOWS}WinApi.Windows, Vcl.Forms,{$ENDIF} System.Classes, System.UITypes,
+    {$IFDEF MSWINDOWS}
+      WinApi.Windows, {$IFNDEF FMX}Vcl.Forms,{$ENDIF}
+    {$ENDIF}
+    System.Classes, System.UITypes,
   {$ELSE}
     {$IFDEF MSWINDOWS}Windows, Forms,{$ENDIF} Classes, {$IFDEF FPC}dynlibs,{$ENDIF}
   {$ENDIF}
   uCEFTypes, uCEFInterfaces, uCEFBaseRefCounted, uCEFSchemeRegistrar;
 
 const
-  CEF_SUPPORTED_VERSION_MAJOR   = 3;
-  CEF_SUPPORTED_VERSION_MINOR   = 3626;
-  CEF_SUPPORTED_VERSION_RELEASE = 1894;
+  CEF_SUPPORTED_VERSION_MAJOR   = 73;
+  CEF_SUPPORTED_VERSION_MINOR   = 1;
+  CEF_SUPPORTED_VERSION_RELEASE = 12;
   CEF_SUPPORTED_VERSION_BUILD   = 0;
 
-  CEF_CHROMEELF_VERSION_MAJOR   = 72;
+  CEF_CHROMEELF_VERSION_MAJOR   = 73;
   CEF_CHROMEELF_VERSION_MINOR   = 0;
-  CEF_CHROMEELF_VERSION_RELEASE = 3626;
-  CEF_CHROMEELF_VERSION_BUILD   = 96;
+  CEF_CHROMEELF_VERSION_RELEASE = 3683;
+  CEF_CHROMEELF_VERSION_BUILD   = 75;
 
   {$IFDEF MSWINDOWS}
   LIBCEF_DLL                    = 'libcef.dll';
@@ -114,8 +117,8 @@ type
       FCustomCommandLines            : TStringList;
       FCustomCommandLineValues       : TStringList;
       FFlashEnabled                  : boolean;
-      //FEnableMediaStream             : boolean;
-      //FEnableSpeechInput             : boolean;
+      FEnableMediaStream             : boolean;
+      FEnableSpeechInput             : boolean;
       FEnableGPU                     : boolean;
       FCheckCEFFiles                 : boolean;
       FLibLoaded                     : boolean;
@@ -356,8 +359,8 @@ type
       property DeleteCache                       : boolean                             read FDeleteCache                       write FDeleteCache;
       property DeleteCookies                     : boolean                             read FDeleteCookies                     write FDeleteCookies;
       property FlashEnabled                      : boolean                             read FFlashEnabled                      write FFlashEnabled;
-      //property EnableMediaStream                 : boolean                             read FEnableMediaStream                 write FEnableMediaStream;
-      //property EnableSpeechInput                 : boolean                             read FEnableSpeechInput                 write FEnableSpeechInput;
+      property EnableMediaStream                 : boolean                             read FEnableMediaStream                 write FEnableMediaStream;
+      property EnableSpeechInput                 : boolean                             read FEnableSpeechInput                 write FEnableSpeechInput;
       property EnableGPU                         : boolean                             read FEnableGPU                         write FEnableGPU;
       property CheckCEFFiles                     : boolean                             read FCheckCEFFiles                     write FCheckCEFFiles;
       property ShowMessageDlg                    : boolean                             read FShowMessageDlg                    write FShowMessageDlg;
@@ -532,8 +535,8 @@ begin
   FDeleteCache                   := False;
   FDeleteCookies                 := False;
   FFlashEnabled                  := True;
-  //FEnableMediaStream             := True;
-  //FEnableSpeechInput             := True;
+  FEnableMediaStream             := True;
+  FEnableSpeechInput             := True;
   FEnableGPU                     := False;
   FCustomCommandLines            := nil;
   FCustomCommandLineValues       := nil;
@@ -697,6 +700,7 @@ begin
     if CheckCEFLibrary and LoadCEFlibrary then
       begin
         {$IFNDEF FPC}
+        {$IFNDEF FMX}
         if FDestroyAppWindows and (ProcessType <> ptBrowser) and (Application <> nil) then
           begin
             // This is the fix for the issue #139
@@ -711,6 +715,7 @@ begin
             if (Application.PopupControlWnd <> 0) then DeallocateHWnd(Application.PopupControlWnd);
             {$ENDIF}
           end;
+        {$ENDIF}
         {$ENDIF}
 
         TempApp := TCustomCefApp.Create(self);
@@ -1486,10 +1491,8 @@ begin
             commandLine.AppendSwitch('--enable-system-flash');
           end;
 
-      // These switches appear in the CEF3 source but they didn't seem to do anything in last tests
-      //
-      //commandLine.AppendSwitchWithValue('--enable-media-stream', IntToStr(Ord(FEnableMediaStream)));
-      //commandLine.AppendSwitchWithValue('--enable-speech-input', IntToStr(Ord(FEnableSpeechInput)));
+      commandLine.AppendSwitchWithValue('--enable-media-stream', IntToStr(Ord(FEnableMediaStream)));
+      commandLine.AppendSwitchWithValue('--enable-speech-input', IntToStr(Ord(FEnableSpeechInput)));
 
       if not(FEnableGPU) then
         begin

@@ -47,7 +47,7 @@ uses
   {$ENDIF}
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.StdCtrls,
-  FMX.Edit, FMX.Controls.Presentation, uFMXWindowParent, uFMXChromium,
+  FMX.Edit, FMX.Controls.Presentation, uCEFFMXWindowParent, uCEFFMXChromium,
   uCEFInterfaces, uCEFConstants, uCEFTypes;
 
 type
@@ -62,10 +62,8 @@ type
     procedure FormCreate(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
     procedure FormShow(Sender: TObject);
-    procedure FMXChromium1AfterCreated(Sender: TObject;
-      const browser: ICefBrowser);
     procedure FMXChromium1Close(Sender: TObject;
-      const browser: ICefBrowser; out Result: Boolean);
+      const browser: ICefBrowser; var aAction : TCefCloseBrowserAction);
     procedure FMXChromium1BeforeClose(Sender: TObject;
       const browser: ICefBrowser);
     procedure FMXChromium1BeforePopup(Sender: TObject;
@@ -77,6 +75,8 @@ type
       var settings: TCefBrowserSettings; var noJavascriptAccess,
       Result: Boolean);
     procedure FormResize(Sender: TObject);
+    procedure FMXChromium1AfterCreated(Sender: TObject;
+      const browser: ICefBrowser);
 
   protected
     // Variables to control when can we destroy the form safely
@@ -118,6 +118,11 @@ implementation
 // This demo uses a TFMXChromium and a TFMXWindowParent.
 // TFMXApplicationService is used to handle custom Windows messages
 
+// All FMX applications using CEF4Delphi should add the $(FrameworkType) conditional define
+// in the project options to avoid duplicated resources.
+// This demo has that define in the menu option :
+// Project -> Options -> Building -> Delphi compiler -> Conditional defines (All configurations)
+
 // Destruction steps
 // =================
 // 1. FormCloseQuery sets CanClose to FALSE calls TFMXChromium.CloseBrowser which triggers the TFMXChromium.OnClose event.
@@ -128,7 +133,8 @@ uses
   FMX.Platform, FMX.Platform.Win,
   uCEFMiscFunctions, uCEFApplication, uFMXApplicationService;
 
-procedure TSimpleFMXBrowserFrm.FMXChromium1AfterCreated(Sender: TObject; const browser: ICefBrowser);
+procedure TSimpleFMXBrowserFrm.FMXChromium1AfterCreated(Sender: TObject;
+  const browser: ICefBrowser);
 begin
   // Now the browser is fully initialized we can send a message to the main form to load the initial web page.
   PostCustomMessage(CEF_AFTERCREATED);
@@ -158,10 +164,10 @@ begin
   Result := (targetDisposition in [WOD_NEW_FOREGROUND_TAB, WOD_NEW_BACKGROUND_TAB, WOD_NEW_POPUP, WOD_NEW_WINDOW]);
 end;
 
-procedure TSimpleFMXBrowserFrm.FMXChromium1Close(Sender: TObject; const browser: ICefBrowser; out Result: Boolean);
+procedure TSimpleFMXBrowserFrm.FMXChromium1Close(Sender: TObject; const browser: ICefBrowser; var aAction : TCefCloseBrowserAction);
 begin
   PostCustomMessage(CEF_DESTROY);
-  Result := True;
+  aAction := cbaDelay;
 end;
 
 function TSimpleFMXBrowserFrm.PostCustomMessage(aMessage, wParam : cardinal; lParam : integer) : boolean;
@@ -207,18 +213,9 @@ begin
 end;
 
 procedure TSimpleFMXBrowserFrm.ResizeChild;
-var
-  TempRect : System.Types.TRect;
 begin
   if (FMXWindowParent <> nil) then
-    begin
-      TempRect.Top    := round(AddressPnl.Height);
-      TempRect.Left   := 0;
-      TempRect.Right  := ClientWidth  - 1;
-      TempRect.Bottom := ClientHeight - 1;
-
-      FMXWindowParent.SetBounds(TempRect);
-    end;
+    FMXWindowParent.SetBounds(0, round(AddressPnl.Height), ClientWidth - 1, ClientHeight -  1);
 end;
 
 procedure TSimpleFMXBrowserFrm.CreateFMXWindowParent;
@@ -256,6 +253,7 @@ begin
       TempRect.Right  := round(TempClientRect.Right);
       TempRect.Bottom := round(TempClientRect.Bottom);
 
+      FMXChromium1.DefaultUrl := AddressEdt.Text;
       if not(FMXChromium1.CreateBrowser(TempHandle, TempRect)) then Timer1.Enabled := True;
     end;
 end;
@@ -293,7 +291,6 @@ begin
   // Now the browser is fully initialized
   Caption            := 'Simple FMX Browser';
   AddressPnl.Enabled := True;
-  LoadURL;
 end;
 
 procedure TSimpleFMXBrowserFrm.DoDestroyParent;

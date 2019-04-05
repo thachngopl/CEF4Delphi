@@ -148,12 +148,12 @@ contains
   uCEFBaseRefCounted in '..\source\uCEFBaseRefCounted.pas',
   uCEFBaseScopedWrapper in '..\source\uCEFBaseScopedWrapper.pas',
   uCEFAccessibilityHandler in '..\source\uCEFAccessibilityHandler.pas',
-  uOLEDragAndDrop in '..\source\uOLEDragAndDrop.pas',
+  uCEFOLEDragAndDrop in '..\source\uCEFOLEDragAndDrop.pas',
   uCEFDragAndDropMgr in '..\source\uCEFDragAndDropMgr.pas',
   uCEFGetExtensionResourceCallback in '..\source\uCEFGetExtensionResourceCallback.pas',
   uCEFExtension in '..\source\uCEFExtension.pas',
   uCEFExtensionHandler in '..\source\uCEFExtensionHandler.pas',
-  uBufferPanel in '..\source\uBufferPanel.pas',
+  uCEFBufferPanel in '..\source\uCEFBufferPanel.pas',
   uCEFApp in '..\source\uCEFApp.pas',
   uCEFWorkScheduler in '..\source\uCEFWorkScheduler.pas',
   uCEFWorkSchedulerThread in '..\source\uCEFWorkSchedulerThread.pas',
@@ -167,7 +167,8 @@ contains
   uCEFLinkedWindowParent in '..\source\uCEFLinkedWindowParent.pas',
   uCEFUrlRequestClientEvents in '..\source\uCEFUrlRequestClientEvents.pas',
   uCEFUrlRequestClientComponent in '..\source\uCEFUrlRequestClientComponent.pas',
-  uCEFOSRIMEHandler in '..\source\uCEFOSRIMEHandler.pas';
+  uCEFOSRIMEHandler in '..\source\uCEFOSRIMEHandler.pas',
+  uCEFAudioHandler in '..\source\uCEFAudioHandler.pas';
 
 end.
 

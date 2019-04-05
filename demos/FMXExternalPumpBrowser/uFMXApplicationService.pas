@@ -77,7 +77,7 @@ implementation
 uses
   FMX.Forms,
   uFMXExternalPumpBrowser,
-  uFMXWorkScheduler,
+  uCEFFMXWorkScheduler,
   {$IFDEF MSWINDOWS}
   Winapi.Messages, Winapi.Windows,
   {$ENDIF}
@@ -106,7 +106,11 @@ end;
 
 function TFMXApplicationService.GetVersionString: string;
 begin
+  {$IFDEF DELPHI22_UP}
   Result := OldFMXApplicationService.GetVersionString;
+  {$ELSE DELPHI22_UP}
+  Result := 'unsupported yet';
+  {$ENDIF DELPHI22_UP}
 end;
 
 procedure TFMXApplicationService.Run;
@@ -194,6 +198,12 @@ begin
         if not(Application.Terminated) and
            (GlobalFMXWorkScheduler <> nil) then
           GlobalFMXWorkScheduler.ScheduleWork(TempMsg.lParam);
+
+      CEF_AFTERCREATED :
+        if not(Application.Terminated) and
+           (Application.MainForm <> nil) and
+           (Application.MainForm is TFMXExternalPumpBrowserFrm) then
+          TFMXExternalPumpBrowserFrm(Application.MainForm).DoBrowserCreated;
     end;
   {$ENDIF}
 

@@ -219,6 +219,7 @@ type
       FOnScrollOffsetChanged          : TOnScrollOffsetChanged;
       FOnIMECompositionRangeChanged   : TOnIMECompositionRangeChanged;
       FOnTextSelectionChanged         : TOnTextSelectionChanged;
+      FOnVirtualKeyboardRequested     : TOnVirtualKeyboardRequested;
 
       // ICefDragHandler
       FOnDragEnter                    : TOnDragEnter;
@@ -226,6 +227,11 @@ type
 
       // ICefFindHandler
       FOnFindResult                   : TOnFindResult;
+
+      // ICefAudioHandler
+      FOnAudioStreamStarted           : TOnAudioStreamStarted;
+      FOnAudioStreamPacket            : TOnAudioStreamPacket;
+      FOnAudioStreamStopped           : TOnAudioStreamStopped;
 
       // Custom
       FOnTextResultAvailable              : TOnTextResultAvailableEvent;
@@ -262,6 +268,7 @@ type
       function  GetFrameCount : NativeUInt;
       function  GetRequestContextCache : ustring;
       function  GetRequestContextIsGlobal : boolean;
+      function  GetAudioMuted : boolean;
 
       procedure SetDoNotTrack(aValue : boolean);
       procedure SetSendReferrer(aValue : boolean);
@@ -290,6 +297,7 @@ type
       procedure SetZoomPct(const aValue : double);
       procedure SetZoomStep(aValue : byte);
       procedure SetWindowlessFrameRate(aValue : integer);
+      procedure SetAudioMuted(aValue : boolean);
 
 
       function  CreateBrowserHost(aWindowInfo : PCefWindowInfo; const aURL : ustring; const aSettings : PCefBrowserSettings; const aContext : ICefRequestContext): boolean;
@@ -332,6 +340,8 @@ type
       function  MustCreateJsDialogHandler : boolean; virtual;
       function  MustCreateDragHandler : boolean; virtual;
       function  MustCreateFindHandler : boolean; virtual;
+      function  MustCreateAudioHandler : boolean; virtual;
+
       {$IFDEF MSWINDOWS}
       procedure PrefsAvailableMsg(var aMessage : TMessage);
       {$ENDIF}
@@ -453,6 +463,7 @@ type
       procedure doOnScrollOffsetChanged(const browser: ICefBrowser; x, y: Double); virtual;
       procedure doOnIMECompositionRangeChanged(const browser: ICefBrowser; const selected_range: PCefRange; character_boundsCount: NativeUInt; const character_bounds: PCefRect); virtual;
       procedure doOnTextSelectionChanged(const browser: ICefBrowser; const selected_text: ustring; const selected_range: PCefRange); virtual;
+      procedure doOnVirtualKeyboardRequested(const browser: ICefBrowser; input_mode: TCefTextInpuMode); virtual;
 
       // ICefDragHandler
       function  doOnDragEnter(const browser: ICefBrowser; const dragData: ICefDragData; mask: TCefDragOperations): Boolean; virtual;
@@ -460,6 +471,11 @@ type
 
       // ICefFindHandler
       procedure doOnFindResult(const browser: ICefBrowser; identifier, count: Integer; const selectionRect: PCefRect; activeMatchOrdinal: Integer; finalUpdate: Boolean); virtual;
+
+      // ICefAudioHandler
+      procedure doOnAudioStreamStarted(const browser: ICefBrowser; audio_stream_id, channels: integer; channel_layout: TCefChannelLayout; sample_rate, frames_per_buffer: integer);
+      procedure doOnAudioStreamPacket(const browser: ICefBrowser; audio_stream_id: integer; const data : PPSingle; frames: integer; pts: int64);
+      procedure doOnAudioStreamStopped(const browser: ICefBrowser; audio_stream_id: integer);
 
       // Custom
       procedure doCookiesDeleted(numDeleted : integer); virtual;
@@ -557,6 +573,7 @@ type
       procedure   SendMouseClickEvent(const event: PCefMouseEvent; kind: TCefMouseButtonType; mouseUp: Boolean; clickCount: Integer);
       procedure   SendMouseMoveEvent(const event: PCefMouseEvent; mouseLeave: Boolean);
       procedure   SendMouseWheelEvent(const event: PCefMouseEvent; deltaX, deltaY: Integer);
+      procedure   SendTouchEvent(const event: PCefTouchEvent);
       procedure   SendFocusEvent(setFocus: Boolean);
       procedure   SendCaptureLostEvent;
       function    SendProcessMessage(targetProcess: TCefProcessId; const ProcMessage: ICefProcessMessage): Boolean;
@@ -624,6 +641,7 @@ type
       property  HasValidMainFrame       : boolean                      read GetHasValidMainFrame;
       property  FrameCount              : NativeUInt                   read GetFrameCount;
       property  DragOperations          : TCefDragOperations           read FDragOperations           write FDragOperations;
+      property  AudioMuted              : boolean                      read GetAudioMuted             write SetAudioMuted;
 
       property  WebRTCIPHandlingPolicy  : TCefWebRTCHandlingPolicy     read FWebRTCIPHandlingPolicy   write SetWebRTCIPHandlingPolicy;
       property  WebRTCMultipleRoutes    : TCefState                    read FWebRTCMultipleRoutes     write SetWebRTCMultipleRoutes;
@@ -741,6 +759,7 @@ type
       property OnScrollOffsetChanged            : TOnScrollOffsetChanged            read FOnScrollOffsetChanged            write FOnScrollOffsetChanged;
       property OnIMECompositionRangeChanged     : TOnIMECompositionRangeChanged     read FOnIMECompositionRangeChanged     write FOnIMECompositionRangeChanged;
       property OnTextSelectionChanged           : TOnTextSelectionChanged           read FOnTextSelectionChanged           write FOnTextSelectionChanged;
+      property OnVirtualKeyboardRequested       : TOnVirtualKeyboardRequested       read FOnVirtualKeyboardRequested       write FOnVirtualKeyboardRequested;
 
       // ICefDragHandler
       property OnDragEnter                      : TOnDragEnter                      read FOnDragEnter                      write FOnDragEnter;
@@ -748,6 +767,11 @@ type
 
       // ICefFindHandler
       property OnFindResult                     : TOnFindResult                     read FOnFindResult                     write FOnFindResult;
+
+      // ICefAudioHandler
+      property OnAudioStreamStarted             : TOnAudioStreamStarted             read FOnAudioStreamStarted             write FOnAudioStreamStarted;
+      property OnAudioStreamPacket              : TOnAudioStreamPacket              read FOnAudioStreamPacket              write FOnAudioStreamPacket;
+      property OnAudioStreamStopped             : TOnAudioStreamStopped             read FOnAudioStreamStopped             write FOnAudioStreamStopped;
 
   end;
 
@@ -764,7 +788,7 @@ uses
   SysUtils, Math,
   {$ENDIF}
   uCEFBrowser, uCEFValue, uCEFDictionaryValue, uCEFStringMultimap, uCEFFrame,
-  uCEFApplication, uCEFProcessMessage, uCEFRequestContext, {$IFNDEF FPC}uOLEDragAndDrop,{$ENDIF}
+  uCEFApplication, uCEFProcessMessage, uCEFRequestContext, {$IFNDEF FPC}uCEFOLEDragAndDrop,{$ENDIF}
   uCEFPDFPrintCallback, uCEFResolveCallback, uCEFDeleteCookiesCallback, uCEFStringVisitor,
   uCEFListValue, uCEFNavigationEntryVisitor;
 
@@ -985,7 +1009,8 @@ begin
                                                 FIsOSR, // Create the Render Handler in OSR mode only
                                                 True,
                                                 MustCreateDragHandler,
-                                                MustCreateFindHandler);
+                                                MustCreateFindHandler,
+                                                MustCreateAudioHandler);
 
         Result   := True;
       end;
@@ -1098,6 +1123,7 @@ begin
   FOnScrollOffsetChanged          := nil;
   FOnIMECompositionRangeChanged   := nil;
   FOnTextSelectionChanged         := nil;
+  FOnVirtualKeyboardRequested     := nil;
 
   // ICefDragHandler
   FOnDragEnter                    := nil;
@@ -1105,6 +1131,11 @@ begin
 
   // ICefFindHandler
   FOnFindResult                   := nil;
+
+  // ICefAudioHandler
+  FOnAudioStreamStarted           := nil;
+  FOnAudioStreamPacket            := nil;
+  FOnAudioStreamStopped           := nil;
 
   // Custom
   FOnTextResultAvailable              := nil;
@@ -1787,6 +1818,16 @@ end;
 function TChromium.GetRequestContextIsGlobal : boolean;
 begin
   Result := Initialized and FBrowser.host.RequestContext.IsGlobal;
+end;
+
+function TChromium.GetAudioMuted : boolean;
+begin
+  Result := Initialized and FBrowser.host.IsAudioMuted;
+end;
+
+procedure TChromium.SetAudioMuted(aValue : boolean);
+begin
+  if Initialized then FBrowser.Host.SetAudioMuted(aValue);
 end;
 
 procedure TChromium.SetWindowlessFrameRate(aValue : integer);
@@ -2981,6 +3022,13 @@ begin
   Result := assigned(FOnFindResult);
 end;
 
+function TChromium.MustCreateAudioHandler : boolean;
+begin
+  Result := assigned(FOnAudioStreamStarted) or
+            assigned(FOnAudioStreamPacket)  or
+            assigned(FOnAudioStreamStopped);
+end;
+
 {$IFDEF MSWINDOWS}
 procedure TChromium.PrefsAvailableMsg(var aMessage : TMessage);
 begin
@@ -3074,7 +3122,14 @@ begin
           InitializeSettings(FDevBrowserSettings);
           InitializeDevToolsWindowInfo(aDevTools);
 
-          TempClient := TCefClientOwn.Create;
+          TempClient := TCustomClientHandler.Create(Self, False, False,
+                                                    False, False,
+                                                    MustCreateKeyboardHandler,
+                                                    False, False,
+                                                    False, False,
+                                                    False, False,
+                                                    False, False,
+                                                    False);
 
           if (inspectElementAt.x <> low(integer)) and
              (inspectElementAt.y <> low(integer)) then
@@ -3203,12 +3258,34 @@ end;
 {$ENDIF}
 
 function TChromium.doOnClose(const browser: ICefBrowser): Boolean;
+var
+  TempAction : TCefCloseBrowserAction;
 begin
-  Result := False;
+  Result     := False;
+  TempAction := cbaClose;
 
-  if (browser <> nil) and (FBrowserId = browser.Identifier) then FClosing := True;
+  // TempAction values
+  // -----------------
+  // cbaCancel : stop closing the browser
+  // cbaClose  : continue closing the browser
+  // cbaDelay  : stop closing the browser momentarily. Used when the application
+  //             needs to execute some custom processes before closing the
+  //             browser. This is usually needed to destroy a TCEFWindowParent
+  //             in the main thread before closing the browser.
+  if Assigned(FOnClose) then FOnClose(Self, browser, TempAction);
 
-  if Assigned(FOnClose) then FOnClose(Self, browser, Result);
+  case TempAction of
+    cbaCancel : Result := True;
+
+    cbaDelay :
+      begin
+        Result := True;
+        if (browser <> nil) and (FBrowserId = browser.Identifier) then FClosing := True;
+      end;
+
+    else
+      if (browser <> nil) and (FBrowserId = browser.Identifier) then FClosing := True;
+  end;
 end;
 
 procedure TChromium.doOnBeforeClose(const browser: ICefBrowser);
@@ -3454,6 +3531,34 @@ procedure TChromium.doOnFindResult(const browser            : ICefBrowser;
 begin
   if Assigned(FOnFindResult) then
     FOnFindResult(Self, browser, identifier, count, selectionRect, activeMatchOrdinal, finalUpdate);
+end;
+
+procedure TChromium.doOnAudioStreamStarted(const browser           : ICefBrowser;
+                                                 audio_stream_id   : integer;
+                                                 channels          : integer;
+                                                 channel_layout    : TCefChannelLayout;
+                                                 sample_rate       : integer;
+                                                 frames_per_buffer : integer);
+begin
+  if Assigned(FOnAudioStreamStarted) then
+    FOnAudioStreamStarted(Self, browser, audio_stream_id, channels, channel_layout, sample_rate, frames_per_buffer);
+end;
+
+procedure TChromium.doOnAudioStreamPacket(const browser         : ICefBrowser;
+                                                audio_stream_id : integer;
+                                          const data            : PPSingle;
+                                                frames          : integer;
+                                                pts             : int64);
+begin
+  if Assigned(FOnAudioStreamPacket) then
+    FOnAudioStreamPacket(Self, browser, audio_stream_id, data, frames, pts);
+end;
+
+procedure TChromium.doOnAudioStreamStopped(const browser         : ICefBrowser;
+                                                 audio_stream_id : integer);
+begin
+  if Assigned(FOnAudioStreamStopped) then
+    FOnAudioStreamStopped(Self, browser, audio_stream_id);
 end;
 
 procedure TChromium.doOnFullScreenModeChange(const browser: ICefBrowser; fullscreen: Boolean);
@@ -3821,6 +3926,13 @@ begin
     FOnTextSelectionChanged(self, browser, selected_text, selected_range);
 end;
 
+procedure TChromium.doOnVirtualKeyboardRequested(const browser    : ICefBrowser;
+                                                       input_mode : TCefTextInpuMode);
+begin
+  if assigned(FOnVirtualKeyboardRequested) then
+    FOnVirtualKeyboardRequested(self, browser, input_mode);
+end;
+
 function TChromium.doOnSetFocus(const browser: ICefBrowser; source: TCefFocusSource): Boolean;
 begin
   Result := False;
@@ -4061,6 +4173,11 @@ end;
 procedure TChromium.SendMouseWheelEvent(const event: PCefMouseEvent; deltaX, deltaY: Integer);
 begin
   if Initialized then FBrowser.Host.SendMouseWheelEvent(event, deltaX, deltaY);
+end;
+
+procedure TChromium.SendTouchEvent(const event: PCefTouchEvent);
+begin
+  if Initialized then FBrowser.Host.SendTouchEvent(event);
 end;
 
 procedure TChromium.SendFocusEvent(setFocus: Boolean);

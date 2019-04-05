@@ -35,7 +35,7 @@
  *
  *)
 
-unit uFMXBufferPanel;
+unit uCEFFMXBufferPanel;
 
 {$I cef.inc}
 
@@ -128,6 +128,10 @@ type
       property RotationCenter;
       property Scale;
       property Size;
+      {$ENDIF}
+      {$IFNDEF DELPHI23_UP}
+      property Hint;
+      property ShowHint;
       {$ENDIF}
 
       property OnEnter;

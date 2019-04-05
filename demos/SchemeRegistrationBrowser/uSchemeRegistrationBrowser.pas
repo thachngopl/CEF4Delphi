@@ -87,7 +87,7 @@ type
       var noJavascriptAccess: Boolean; var Result: Boolean);
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
     procedure Chromium1Close(Sender: TObject; const browser: ICefBrowser;
-      out Result: Boolean);
+      var aAction : TCefCloseBrowserAction);
     procedure Chromium1BeforeClose(Sender: TObject;
       const browser: ICefBrowser);
   private
@@ -127,7 +127,7 @@ uses
 
 procedure GlobalCEFApp_OnRegCustomSchemes(const registrar: TCefSchemeRegistrarRef);
 begin
-  registrar.AddCustomScheme('hello', True, True, False, False, False, False);
+  registrar.AddCustomScheme('hello', CEF_SCHEME_OPTION_STANDARD or CEF_SCHEME_OPTION_LOCAL);
 end;
 
 procedure CreateGlobalCEFApp;
@@ -169,10 +169,10 @@ begin
 end;
 
 procedure TSchemeRegistrationBrowserFrm.Chromium1Close(Sender: TObject;
-  const browser: ICefBrowser; out Result: Boolean);
+  const browser: ICefBrowser; var aAction : TCefCloseBrowserAction);
 begin
   PostMessage(Handle, CEF_DESTROY, 0, 0);
-  Result := True;
+  aAction := cbaDelay;
 end;
 
 procedure TSchemeRegistrationBrowserFrm.Chromium1ContextMenuCommand(

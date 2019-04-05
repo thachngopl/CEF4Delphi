@@ -79,6 +79,8 @@ const
   MINIBROWSER_CONTEXTMENU_COPYALLTEXT     = MENU_ID_USER_FIRST + 10;
   MINIBROWSER_CONTEXTMENU_TAKESNAPSHOT    = MENU_ID_USER_FIRST + 11;
   MINIBROWSER_CONTEXTMENU_GETNAVIGATION   = MENU_ID_USER_FIRST + 12;
+  MINIBROWSER_CONTEXTMENU_MUTEAUDIO       = MENU_ID_USER_FIRST + 13;
+  MINIBROWSER_CONTEXTMENU_UNMUTEAUDIO     = MENU_ID_USER_FIRST + 14;
 
 type
   TMiniBrowserFrm = class(TForm)
@@ -193,7 +195,7 @@ type
       out Result: TCefReturnValue);
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
     procedure Chromium1Close(Sender: TObject; const browser: ICefBrowser;
-      out Result: Boolean);
+      var aAction : TCefCloseBrowserAction);
     procedure Chromium1BeforeClose(Sender: TObject;
       const browser: ICefBrowser);
     procedure Chromium1RenderCompMsg(var aMessage : TMessage; var aHandled: Boolean);
@@ -321,7 +323,8 @@ end;
 
 procedure TMiniBrowserFrm.Chromium1BeforeClose(Sender: TObject; const browser: ICefBrowser);
 begin
-  if (Chromium1.BrowserId = 0) then // The main browser is being destroyed
+  // The main browser is being destroyed
+  if (Chromium1.BrowserId = 0) then
     begin
       FCanClose := True;
       PostMessage(Handle, WM_CLOSE, 0, 0);
@@ -354,6 +357,11 @@ begin
     model.AddItem(MINIBROWSER_CONTEXTMENU_HIDEDEVTOOLS, 'Hide DevTools')
    else
     model.AddItem(MINIBROWSER_CONTEXTMENU_SHOWDEVTOOLS, 'Show DevTools');
+
+  if Chromium1.AudioMuted then
+    model.AddItem(MINIBROWSER_CONTEXTMENU_UNMUTEAUDIO, 'Unmute audio')
+   else
+    model.AddItem(MINIBROWSER_CONTEXTMENU_MUTEAUDIO,   'Mute audio');
 end;
 
 function PathToMyDocuments : string;
@@ -430,15 +438,13 @@ begin
   Result := False;
 end;
 
-procedure TMiniBrowserFrm.Chromium1Close(Sender: TObject; const browser: ICefBrowser; out Result: Boolean);
+procedure TMiniBrowserFrm.Chromium1Close(Sender: TObject; const browser: ICefBrowser; var aAction : TCefCloseBrowserAction);
 begin
   if (browser <> nil) and (Chromium1.BrowserId = browser.Identifier) then
     begin
       PostMessage(Handle, CEF_DESTROY, 0, 0);
-      Result := True;
-    end
-   else
-    Result := False;
+      aAction := cbaDelay;
+    end;
 end;
 
 procedure TMiniBrowserFrm.Chromium1ContextMenuCommand(Sender: TObject;
@@ -502,6 +508,12 @@ begin
     MINIBROWSER_CONTEXTMENU_JSPRINTDOC :
       if (browser <> nil) and (browser.MainFrame <> nil) then
         browser.MainFrame.ExecuteJavaScript('window.print();', 'about:blank', 0);
+
+    MINIBROWSER_CONTEXTMENU_UNMUTEAUDIO :
+      Chromium1.AudioMuted := False;
+
+    MINIBROWSER_CONTEXTMENU_MUTEAUDIO :
+      Chromium1.AudioMuted := True;
   end;
 end;
 
@@ -572,8 +584,6 @@ var
   TempMsg : TMsg;
 begin
   Result := False;
-
-  if not(Chromium1.IsSameBrowser(browser)) then exit;
 
   if (event <> nil) and (osEvent <> nil) then
     case osEvent.Message of
@@ -728,8 +738,7 @@ procedure TMiniBrowserFrm.Chromium1PreKeyEvent(Sender: TObject;
 begin
   Result := False;
 
-  if Chromium1.IsSameBrowser(browser) and
-     (event <> nil) and
+  if (event <> nil) and
      (event.kind in [KEYEVENT_KEYDOWN, KEYEVENT_KEYUP]) and
      (event.windows_key_code = VK_F12) then
     isKeyboardShortcut := True;
@@ -940,6 +949,7 @@ end;
 procedure TMiniBrowserFrm.HideDevToolsMsg(var aMessage : TMessage);
 begin
   HideDevTools;
+  Chromium1.SetFocus(True);
 end;
 
 procedure TMiniBrowserFrm.Inczoom1Click(Sender: TObject);
