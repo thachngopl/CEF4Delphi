@@ -12,6 +12,7 @@ object MainForm: TMainForm
   Font.Style = []
   OldCreateOrder = False
   Position = poScreenCenter
+  OnClose = FormClose
   OnCloseQuery = FormCloseQuery
   OnCreate = FormCreate
   OnShow = FormShow
@@ -41,7 +42,6 @@ object MainForm: TMainForm
     Padding.Right = 5
     Padding.Bottom = 5
     ParentDoubleBuffered = False
-    ShowCaption = False
     TabOrder = 1
     object Edit1: TEdit
       Left = 5

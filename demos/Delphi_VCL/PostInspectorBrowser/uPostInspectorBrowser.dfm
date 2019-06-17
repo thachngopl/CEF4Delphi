@@ -40,7 +40,6 @@ object Form1: TForm1
     Padding.Top = 5
     Padding.Right = 5
     Padding.Bottom = 5
-    ShowCaption = False
     TabOrder = 0
     object GoBtn: TButton
       Left = 1002
@@ -78,6 +77,7 @@ object Form1: TForm1
     Height = 439
     Align = alClient
     TabOrder = 1
+    ExplicitTop = 27
   end
   object Memo1: TMemo
     Left = 0
