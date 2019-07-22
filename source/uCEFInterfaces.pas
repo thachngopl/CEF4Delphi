@@ -324,7 +324,7 @@ type
     function  doOnBeforeBrowse(const browser: ICefBrowser; const frame: ICefFrame; const request: ICefRequest; user_gesture, isRedirect: Boolean): Boolean;
     function  doOnOpenUrlFromTab(const browser: ICefBrowser; const frame: ICefFrame; const targetUrl: ustring; targetDisposition: TCefWindowOpenDisposition; userGesture: Boolean): Boolean;
     procedure doOnGetResourceRequestHandler(const browser: ICefBrowser; const frame: ICefFrame; const request: ICefRequest; is_navigation, is_download: boolean; const request_initiator: ustring; var disable_default_handling: boolean; var aResourceRequestHandler : ICefResourceRequestHandler; var aUseInternalHandler : boolean);
-    function  doOnGetAuthCredentials(const browser: ICefBrowser; const frame: ICefFrame; isProxy: Boolean; const host: ustring; port: Integer; const realm, scheme: ustring; const callback: ICefAuthCallback): Boolean;
+    function  doOnGetAuthCredentials(const browser: ICefBrowser; const originUrl: ustring; isProxy: Boolean; const host: ustring; port: Integer; const realm, scheme: ustring; const callback: ICefAuthCallback): Boolean;
     function  doOnQuotaRequest(const browser: ICefBrowser; const originUrl: ustring; newSize: Int64; const callback: ICefRequestCallback): Boolean;
     function  doOnCertificateError(const browser: ICefBrowser; certError: TCefErrorcode; const requestUrl: ustring; const sslInfo: ICefSslInfo; const callback: ICefRequestCallback): Boolean;
     function  doOnSelectClientCertificate(const browser: ICefBrowser; isProxy: boolean; const host: ustring; port: integer; certificatesCount: NativeUInt; const certificates: TCefX509CertificateArray; const callback: ICefSelectClientCertificateCallback): boolean;
@@ -388,7 +388,22 @@ type
     procedure doResolvedHostAvailable(result: TCefErrorCode; const resolvedIps: TStrings);
     function  doNavigationVisitorResultAvailable(const entry: ICefNavigationEntry; current: Boolean; index, total: Integer) : boolean;
     procedure doDownloadImageFinished(const imageUrl: ustring; httpStatusCode: Integer; const image: ICefImage);
-
+    function  MustCreateLoadHandler : boolean;
+    function  MustCreateFocusHandler : boolean;
+    function  MustCreateContextMenuHandler : boolean;
+    function  MustCreateDialogHandler : boolean;
+    function  MustCreateKeyboardHandler : boolean;
+    function  MustCreateDisplayHandler : boolean;
+    function  MustCreateDownloadHandler : boolean;
+    function  MustCreateJsDialogHandler : boolean;
+    function  MustCreateLifeSpanHandler : boolean;
+    function  MustCreateRenderHandler : boolean;
+    function  MustCreateRequestHandler : boolean;
+    function  MustCreateDragHandler : boolean;
+    function  MustCreateFindHandler : boolean;
+    function  MustCreateAudioHandler : boolean;
+    function  MustCreateResourceRequestHandler : boolean;
+    function  MustCreateCookieAccessFilter : boolean;
   end;
 
   IServerEvents = interface
@@ -1663,7 +1678,7 @@ type
     function  OnBeforeBrowse(const browser: ICefBrowser; const frame: ICefFrame; const request: ICefRequest; user_gesture, isRedirect: Boolean): Boolean;
     function  OnOpenUrlFromTab(const browser: ICefBrowser; const frame: ICefFrame; const targetUrl: ustring; targetDisposition: TCefWindowOpenDisposition; userGesture: Boolean): Boolean;
     procedure GetResourceRequestHandler(const browser: ICefBrowser; const frame: ICefFrame; const request: ICefRequest; is_navigation, is_download: boolean; const request_initiator: ustring; var disable_default_handling: boolean; var aResourceRequestHandler : ICefResourceRequestHandler);
-    function  GetAuthCredentials(const browser: ICefBrowser; const frame: ICefFrame; isProxy: Boolean; const host: ustring; port: Integer; const realm, scheme: ustring; const callback: ICefAuthCallback): Boolean;
+    function  GetAuthCredentials(const browser: ICefBrowser; const originUrl: ustring; isProxy: Boolean; const host: ustring; port: Integer; const realm, scheme: ustring; const callback: ICefAuthCallback): Boolean;
     function  OnQuotaRequest(const browser: ICefBrowser; const originUrl: ustring; newSize: Int64; const callback: ICefRequestCallback): Boolean;
     function  OnCertificateError(const browser: ICefBrowser; certError: TCefErrorcode; const requestUrl: ustring; const sslInfo: ICefSslInfo; const callback: ICefRequestCallback): Boolean;
     function  OnSelectClientCertificate(const browser: ICefBrowser; isProxy: boolean; const host: ustring; port: integer; certificatesCount: NativeUInt; const certificates: TCefX509CertificateArray; const callback: ICefSelectClientCertificateCallback): boolean;
@@ -1999,6 +2014,7 @@ type
     function  CanSetPreference(const name: ustring): Boolean;
     function  SetPreference(const name: ustring; const value: ICefValue; out error: ustring): Boolean;
     procedure ClearCertificateExceptions(const callback: ICefCompletionCallback);
+    procedure ClearHttpAuthCredentials(const callback: ICefCompletionCallback);
     procedure CloseAllConnections(const callback: ICefCompletionCallback);
     procedure ResolveHost(const origin: ustring; const callback: ICefResolveCallback);
     procedure LoadExtension(const root_directory: ustring; const manifest: ICefDictionaryValue; const handler: ICefExtensionHandler);

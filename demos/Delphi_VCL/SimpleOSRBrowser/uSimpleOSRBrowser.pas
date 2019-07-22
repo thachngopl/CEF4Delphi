@@ -79,6 +79,7 @@ type
     procedure Panel1Exit(Sender: TObject);
     procedure Panel1Resize(Sender: TObject);
     procedure Panel1Click(Sender: TObject);
+    procedure Panel1PaintParentBkg(Sender: TObject);
     procedure Panel1MouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure Panel1MouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
     procedure Panel1MouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
@@ -108,10 +109,10 @@ type
     procedure chrmosrIMECompositionRangeChanged(Sender: TObject; const browser: ICefBrowser; const selected_range: PCefRange; character_boundsCount: NativeUInt; const character_bounds: PCefRect);
 
     procedure SnapshotBtnClick(Sender: TObject);
-    procedure Timer1Timer(Sender: TObject);
     procedure SnapshotBtnEnter(Sender: TObject);
+
+    procedure Timer1Timer(Sender: TObject);
     procedure ComboBox1Enter(Sender: TObject);
-    procedure Panel1PaintParentBkg(Sender: TObject);
 
   protected
     FPopUpBitmap     : TBitmap;
@@ -180,6 +181,7 @@ begin
   GlobalCEFApp                            := TCefApplication.Create;
   GlobalCEFApp.WindowlessRenderingEnabled := True;
   GlobalCEFApp.EnableHighDPISupport       := True;
+  GlobalCEFApp.DisableFeatures            := 'NetworkService,VizDisplayCompositor';
 
   // If you need transparency leave the GlobalCEFApp.BackgroundColor property
   // with the default value or set the alpha channel to 0
@@ -256,7 +258,7 @@ begin
           TempKeyEvent.focus_on_editable_field := ord(False);
 
           chrmosr.SendKeyEvent(@TempKeyEvent);
-          Handled := (Msg.wParam = VK_TAB);
+          Handled := (Msg.wParam in [VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN, VK_TAB]);
         end;
 
     WM_KEYUP :

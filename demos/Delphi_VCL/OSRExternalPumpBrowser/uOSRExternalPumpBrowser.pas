@@ -187,6 +187,7 @@ begin
   GlobalCEFApp.EnableHighDPISupport       := True;
   GlobalCEFApp.ExternalMessagePump        := True;
   GlobalCEFApp.MultiThreadedMessageLoop   := False;
+  GlobalCEFApp.DisableFeatures            := 'NetworkService,VizDisplayCompositor';
   GlobalCEFApp.OnScheduleMessagePumpWork  := GlobalCEFApp_OnScheduleMessagePumpWork;
 end;
 
@@ -257,7 +258,7 @@ begin
           TempKeyEvent.focus_on_editable_field := ord(False);
 
           chrmosr.SendKeyEvent(@TempKeyEvent);
-          Handled := (Msg.wParam = VK_TAB);
+          Handled := (Msg.wParam in [VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN, VK_TAB]);
         end;
 
     WM_KEYUP :

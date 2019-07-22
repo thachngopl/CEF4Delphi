@@ -61,14 +61,14 @@ uses
 
 const
   CEF_SUPPORTED_VERSION_MAJOR   = 75;
-  CEF_SUPPORTED_VERSION_MINOR   = 0;
-  CEF_SUPPORTED_VERSION_RELEASE = 7;
+  CEF_SUPPORTED_VERSION_MINOR   = 1;
+  CEF_SUPPORTED_VERSION_RELEASE = 4;
   CEF_SUPPORTED_VERSION_BUILD   = 0;
 
   CEF_CHROMEELF_VERSION_MAJOR   = 75;
   CEF_CHROMEELF_VERSION_MINOR   = 0;
   CEF_CHROMEELF_VERSION_RELEASE = 3770;
-  CEF_CHROMEELF_VERSION_BUILD   = 80;
+  CEF_CHROMEELF_VERSION_BUILD   = 100;
 
   {$IFDEF MSWINDOWS}
   LIBCEF_DLL                    = 'libcef.dll';
@@ -114,6 +114,7 @@ type
       FMultiThreadedMessageLoop      : boolean;
       FExternalMessagePump           : boolean;
       FDeleteCache                   : boolean;
+      FDeleteCookies                 : boolean;
       FCustomCommandLines            : TStringList;
       FCustomCommandLineValues       : TStringList;
       FFlashEnabled                  : boolean;
@@ -164,10 +165,27 @@ type
       FAllowFileAccessFromFiles      : boolean;
       FAllowRunningInsecureContent   : boolean;
 
-      FMustCreateResourceBundleHandler : boolean;
-      FMustCreateBrowserProcessHandler : boolean;
-      FMustCreateRenderProcessHandler  : boolean;
-      FMustCreateLoadHandler           : boolean;
+      FPluginPolicy                      : TCefPluginPolicySwitch;
+      FDefaultEncoding                   : string;
+      FDisableJavascript                 : boolean;
+      FDisableJavascriptCloseWindows     : boolean;
+      FDisableJavascriptAccessClipboard  : boolean;
+      FDisableJavascriptDomPaste         : boolean;
+      FAllowUniversalAccessFromFileUrls  : boolean;
+      FDisableImageLoading               : boolean;
+      FImageShrinkStandaloneToFit        : boolean;
+      FDisableTextAreaResize             : boolean;
+      FDisableTabToLinks                 : boolean;
+      FDisablePlugins                    : boolean;
+      FEnableProfanityFilter             : boolean;
+      FDisableSpellChecking              : boolean;
+      FOverrideSpellCheckLang            : string;
+      //FEnablePrintPreview               : boolean;
+
+      FMustCreateResourceBundleHandler   : boolean;
+      FMustCreateBrowserProcessHandler   : boolean;
+      FMustCreateRenderProcessHandler    : boolean;
+      FMustCreateLoadHandler             : boolean;
 
       // ICefBrowserProcessHandler
       FOnContextInitialized          : TOnContextInitializedEvent;
@@ -280,7 +298,10 @@ type
       function  ExecuteProcess(const aApp : ICefApp) : integer;
       procedure InitializeSettings(var aSettings : TCefSettings);
       function  InitializeLibrary(const aApp : ICefApp) : boolean;
-      procedure RenameAndDeleteDir(const aDirectory : string);
+      procedure RenameAndDeleteDir(const aDirectory : string; aKeepCookies : boolean = False);
+      procedure DeleteCacheContents(const aDirectory : string);
+      procedure DeleteCookiesDB(const aDirectory : string);
+      procedure MoveCookiesDB(const aSrcDirectory, aDstDirectory : string);
       function  MultiExeProcessing : boolean;
       function  SingleExeProcessing : boolean;
       function  CheckCEFLibrary : boolean;
@@ -362,6 +383,7 @@ type
       property MultiThreadedMessageLoop          : boolean                             read FMultiThreadedMessageLoop          write FMultiThreadedMessageLoop;
       property ExternalMessagePump               : boolean                             read FExternalMessagePump               write FExternalMessagePump;
       property DeleteCache                       : boolean                             read FDeleteCache                       write FDeleteCache;
+      property DeleteCookies                     : boolean                             read FDeleteCookies                     write FDeleteCookies;
       property FlashEnabled                      : boolean                             read FFlashEnabled                      write FFlashEnabled;
       property EnableMediaStream                 : boolean                             read FEnableMediaStream                 write FEnableMediaStream;
       property EnableSpeechInput                 : boolean                             read FEnableSpeechInput                 write FEnableSpeechInput;
@@ -415,6 +437,24 @@ type
       property MetricsRecordingOnly              : boolean                             read FMetricsRecordingOnly              write FMetricsRecordingOnly;
       property AllowFileAccessFromFiles          : boolean                             read FAllowFileAccessFromFiles          write FAllowFileAccessFromFiles;
       property AllowRunningInsecureContent       : boolean                             read FAllowRunningInsecureContent       write FAllowRunningInsecureContent;
+      //property EnablePrintPreview                : boolean                             read FEnablePrintPreview                write FEnablePrintPreview;
+      property PluginPolicy                      : TCefPluginPolicySwitch              read FPluginPolicy                      write FPluginPolicy;
+      property DefaultEncoding                   : string                              read FDefaultEncoding                   write FDefaultEncoding;
+      property DisableJavascript                 : boolean                             read FDisableJavascript                 write FDisableJavascript;
+
+      property DisableJavascriptCloseWindows     : boolean                             read FDisableJavascriptCloseWindows     write FDisableJavascriptCloseWindows;
+      property DisableJavascriptAccessClipboard  : boolean                             read FDisableJavascriptAccessClipboard  write FDisableJavascriptAccessClipboard;
+      property DisableJavascriptDomPaste         : boolean                             read FDisableJavascriptDomPaste         write FDisableJavascriptDomPaste;
+      property AllowUniversalAccessFromFileUrls  : boolean                             read FAllowUniversalAccessFromFileUrls  write FAllowUniversalAccessFromFileUrls;
+      property DisableImageLoading               : boolean                             read FDisableImageLoading               write FDisableImageLoading;
+      property ImageShrinkStandaloneToFit        : boolean                             read FImageShrinkStandaloneToFit        write FImageShrinkStandaloneToFit;
+      property DisableTextAreaResize             : boolean                             read FDisableTextAreaResize             write FDisableTextAreaResize;
+      property DisableTabToLinks                 : boolean                             read FDisableTabToLinks                 write FDisableTabToLinks;
+      property DisablePlugins                    : boolean                             read FDisablePlugins                    write FDisablePlugins;
+      property EnableProfanityFilter             : boolean                             read FEnableProfanityFilter             write FEnableProfanityFilter;
+      property DisableSpellChecking              : boolean                             read FDisableSpellChecking              write FDisableSpellChecking;
+      property OverrideSpellCheckLang            : string                              read FOverrideSpellCheckLang            write FOverrideSpellCheckLang;
+
       property ChildProcessesCount               : integer                             read GetChildProcessesCount;
       property UsedMemory                        : cardinal                            read GetUsedMemory;
       property TotalSystemMemory                 : uint64                              read GetTotalSystemMemory;
@@ -531,6 +571,7 @@ begin
   FMultiThreadedMessageLoop      := True;
   FExternalMessagePump           := False;
   FDeleteCache                   := False;
+  FDeleteCookies                 := False;
   FFlashEnabled                  := True;
   FEnableMediaStream             := True;
   FEnableSpeechInput             := True;
@@ -544,7 +585,7 @@ begin
   FOnRegisterCustomSchemes       := nil;
   FEnableHighDPISupport          := False;
   FMuteAudio                     := False;
-  FSitePerProcess                := True;
+  FSitePerProcess                := False;
   FDisableWebSecurity            := False;
   FDisablePDFExtension           := False;
   FLogProcessInfo                := False;
@@ -567,10 +608,27 @@ begin
   FMetricsRecordingOnly          := False;
   FAllowFileAccessFromFiles      := False;
   FAllowRunningInsecureContent   := False;
+  FPluginPolicy                  := PLUGIN_POLICY_SWITCH_ALLOW;
+  FDefaultEncoding               := '';
+  FDisableJavascript             := False;
   FEnableFeatures                := '';
   FDisableFeatures               := '';
   FEnableBlinkFeatures           := '';
   FDisableBlinkFeatures          := '';
+
+  FDisableJavascriptCloseWindows     := False;
+  FDisableJavascriptAccessClipboard  := False;
+  FDisableJavascriptDomPaste         := False;
+  FAllowUniversalAccessFromFileUrls  := False;
+  FDisableImageLoading               := False;
+  FImageShrinkStandaloneToFit        := False;
+  FDisableTextAreaResize             := False;
+  FDisableTabToLinks                 := False;
+  FDisablePlugins                    := False;
+  FEnableProfanityFilter             := False;
+  FDisableSpellChecking              := False;
+  FOverrideSpellCheckLang            := '';
+  //FEnablePrintPreview                := False;
 
   FMustCreateResourceBundleHandler := False;
   FMustCreateBrowserProcessHandler := True;
@@ -1148,7 +1206,14 @@ begin
     try
       if (aApp <> nil) then
         begin
-          if FDeleteCache then RenameAndDeleteDir(FCache);
+          if FDeleteCache and FDeleteCookies then
+            RenameAndDeleteDir(FCache)
+           else
+            if FDeleteCookies then
+              DeleteCookiesDB(FCache)
+             else
+              if FDeleteCache then
+                RenameAndDeleteDir(FCache, True);
 
           RegisterWidevineCDM;
 
@@ -1176,7 +1241,55 @@ begin
   end;
 end;
 
-procedure TCefApplication.RenameAndDeleteDir(const aDirectory : string);
+procedure TCefApplication.DeleteCacheContents(const aDirectory : string);
+var
+  TempFiles : TStringList;
+begin
+  TempFiles := TStringList.Create;
+
+  try
+    TempFiles.Add('Cookies');
+    TempFiles.Add('Cookies-journal');
+
+    DeleteDirContents(aDirectory, TempFiles);
+  finally
+    FreeAndNil(TempFiles);
+  end;
+end;
+
+procedure TCefApplication.DeleteCookiesDB(const aDirectory : string);
+var
+  TempFiles : TStringList;
+begin
+  TempFiles := TStringList.Create;
+
+  try
+    TempFiles.Add(IncludeTrailingPathDelimiter(aDirectory) + 'Cookies');
+    TempFiles.Add(IncludeTrailingPathDelimiter(aDirectory) + 'Cookies-journal');
+
+    DeleteFileList(TempFiles);
+  finally
+    FreeAndNil(TempFiles);
+  end;
+end;
+
+procedure TCefApplication.MoveCookiesDB(const aSrcDirectory, aDstDirectory : string);
+var
+  TempFiles : TStringList;
+begin
+  TempFiles := TStringList.Create;
+
+  try
+    TempFiles.Add('Cookies');
+    TempFiles.Add('Cookies-journal');
+
+    MoveFileList(TempFiles, aSrcDirectory, aDstDirectory);
+  finally
+    FreeAndNil(TempFiles);
+  end;
+end;
+
+procedure TCefApplication.RenameAndDeleteDir(const aDirectory : string; aKeepCookies : boolean);
 var
   TempOldDir, TempNewDir : string;
   i : integer;
@@ -1197,12 +1310,10 @@ begin
           TempNewDir := TempOldDir + '(' + inttostr(i) + ')';
         until not(DirectoryExists(TempNewDir));
 
-        {$IFDEF MSWINDOWS}
-        if MoveFileW(PWideChar(TempOldDir + chr(0)), PWideChar(TempNewDir + chr(0))) then
-        {$ELSE}
         if RenameFile(TempOldDir, TempNewDir) then
-        {$ENDIF}
           begin
+            if aKeepCookies then MoveCookiesDB(TempNewDir, TempOldDir);
+
             TempThread := TCEFDirectoryDeleterThread.Create(TempNewDir);
             {$IFDEF DELPHI14_UP}
             TempThread.Start;
@@ -1211,10 +1322,16 @@ begin
             {$ENDIF}
           end
          else
-          DeleteDirContents(aDirectory);
+          if aKeepCookies then
+            DeleteCacheContents(aDirectory)
+           else
+            DeleteDirContents(aDirectory);
       end
      else
-      DeleteDirContents(aDirectory);
+      if aKeepCookies then
+        DeleteCacheContents(aDirectory)
+       else
+        DeleteDirContents(aDirectory);
   except
     on e : exception do
       if CustomExceptionHandler('TCefApplication.RenameAndDeleteDir', e) then raise;
@@ -1510,9 +1627,6 @@ begin
 
         appUserGestureRequired               :
           commandLine.AppendSwitchWithValue('--autoplay-policy', 'user-gesture-required');
-
-        appUserGestureRequiredForCrossOrigin :
-          commandLine.AppendSwitchWithValue('--autoplay-policy', 'user-gesture-required-for-cross-origin');
       end;
 
       if FFastUnload then
@@ -1554,6 +1668,56 @@ begin
 
       if FAllowRunningInsecureContent then
         commandLine.AppendSwitch('--allow-running-insecure-content');
+
+      //if FEnablePrintPreview then commandLine.AppendSwitch('--enable-print-preview');
+
+      case FPluginPolicy of
+        PLUGIN_POLICY_SWITCH_DETECT : commandLine.AppendSwitchWithValue('--plugin-policy', 'detect');
+        PLUGIN_POLICY_SWITCH_BLOCK  : commandLine.AppendSwitchWithValue('--plugin-policy', 'block');
+      end;
+
+      if (length(FDefaultEncoding) > 0) then
+        commandLine.AppendSwitchWithValue('--default-encoding', FDefaultEncoding);
+
+      if FDisableJavascript then
+        commandLine.AppendSwitch('--disable-javascript');
+
+      if FDisableJavascriptCloseWindows then
+        commandLine.AppendSwitch('--disable-javascript-close-windows');
+
+      if FDisableJavascriptAccessClipboard then
+        commandLine.AppendSwitch('--disable-javascript-access-clipboard');
+
+      if FDisableJavascriptDomPaste then
+        commandLine.AppendSwitch('--disable-javascript-dom-paste');
+
+      if FAllowUniversalAccessFromFileUrls then
+        commandLine.AppendSwitch('--allow-universal-access-from-files');
+
+      if FDisableImageLoading then
+        commandLine.AppendSwitch('--disable-image-loading');
+
+      if FImageShrinkStandaloneToFit then
+        commandLine.AppendSwitch('--image-shrink-standalone-to-fit');
+
+      if FDisableTextAreaResize then
+        commandLine.AppendSwitch('--disable-text-area-resize');
+
+      if FDisableTabToLinks then
+        commandLine.AppendSwitch('--disable-tab-to-links');
+
+      if FDisablePlugins then
+        commandLine.AppendSwitch('--disable-plugins');
+
+      if FEnableProfanityFilter then
+        commandLine.AppendSwitch('--enable-profanity-filter');
+
+      if FDisableSpellChecking then
+        commandLine.AppendSwitch('--disable-spell-checking');
+
+      if (length(FOverrideSpellCheckLang) > 0) then
+        commandLine.AppendSwitchWithValue('--override-spell-check-lang', FOverrideSpellCheckLang);
+
 
       // The list of features you can enable is here :
       // https://chromium.googlesource.com/chromium/src/+/master/chrome/common/chrome_features.cc

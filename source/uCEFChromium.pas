@@ -336,18 +336,6 @@ type
       procedure HandleList(const aValue : ICefValue; var aResultSL : TStringList; const aRoot, aKey : string);
       procedure HandleInvalid(const aValue : ICefValue; var aResultSL : TStringList; const aRoot, aKey : string);
 
-      function  MustCreateLoadHandler : boolean; virtual;
-      function  MustCreateFocusHandler : boolean; virtual;
-      function  MustCreateContextMenuHandler : boolean; virtual;
-      function  MustCreateDialogHandler : boolean; virtual;
-      function  MustCreateKeyboardHandler : boolean; virtual;
-      function  MustCreateDisplayHandler : boolean; virtual;
-      function  MustCreateDownloadHandler : boolean; virtual;
-      function  MustCreateJsDialogHandler : boolean; virtual;
-      function  MustCreateDragHandler : boolean; virtual;
-      function  MustCreateFindHandler : boolean; virtual;
-      function  MustCreateAudioHandler : boolean; virtual;
-
       {$IFDEF MSWINDOWS}
       procedure PrefsAvailableMsg(var aMessage : TMessage);
       {$ENDIF}
@@ -434,7 +422,7 @@ type
       function  doOnBeforeBrowse(const browser: ICefBrowser; const frame: ICefFrame; const request: ICefRequest; user_gesture, isRedirect: Boolean): Boolean; virtual;
       function  doOnOpenUrlFromTab(const browser: ICefBrowser; const frame: ICefFrame; const targetUrl: ustring; targetDisposition: TCefWindowOpenDisposition; userGesture: Boolean): Boolean; virtual;
       procedure doOnGetResourceRequestHandler(const browser: ICefBrowser; const frame: ICefFrame; const request: ICefRequest; is_navigation, is_download: boolean; const request_initiator: ustring; var disable_default_handling: boolean; var aResourceRequestHandler : ICefResourceRequestHandler; var aUseInternalHandler : boolean); virtual;
-      function  doOnGetAuthCredentials(const browser: ICefBrowser; const frame: ICefFrame; isProxy: Boolean; const host: ustring; port: Integer; const realm, scheme: ustring; const callback: ICefAuthCallback): Boolean; virtual;
+      function  doOnGetAuthCredentials(const browser: ICefBrowser; const originUrl: ustring; isProxy: Boolean; const host: ustring; port: Integer; const realm, scheme: ustring; const callback: ICefAuthCallback): Boolean; virtual;
       function  doOnQuotaRequest(const browser: ICefBrowser; const originUrl: ustring; newSize: Int64; const callback: ICefRequestCallback): Boolean; virtual;
       function  doOnCertificateError(const browser: ICefBrowser; certError: TCefErrorcode; const requestUrl: ustring; const sslInfo: ICefSslInfo; const callback: ICefRequestCallback): Boolean; virtual;
       function  doOnSelectClientCertificate(const browser: ICefBrowser; isProxy: boolean; const host: ustring; port: integer; certificatesCount: NativeUInt; const certificates: TCefX509CertificateArray; const callback: ICefSelectClientCertificateCallback): boolean; virtual;
@@ -498,6 +486,22 @@ type
       procedure doResolvedHostAvailable(result: TCefErrorCode; const resolvedIps: TStrings); virtual;
       function  doNavigationVisitorResultAvailable(const entry: ICefNavigationEntry; current: Boolean; index, total: Integer) : boolean; virtual;
       procedure doDownloadImageFinished(const imageUrl: ustring; httpStatusCode: Integer; const image: ICefImage); virtual;
+      function  MustCreateLoadHandler : boolean; virtual;
+      function  MustCreateFocusHandler : boolean; virtual;
+      function  MustCreateContextMenuHandler : boolean; virtual;
+      function  MustCreateDialogHandler : boolean; virtual;
+      function  MustCreateKeyboardHandler : boolean; virtual;
+      function  MustCreateDisplayHandler : boolean; virtual;
+      function  MustCreateDownloadHandler : boolean; virtual;
+      function  MustCreateJsDialogHandler : boolean; virtual;
+      function  MustCreateLifeSpanHandler : boolean; virtual;
+      function  MustCreateRenderHandler : boolean; virtual;
+      function  MustCreateRequestHandler : boolean; virtual;
+      function  MustCreateDragHandler : boolean; virtual;
+      function  MustCreateFindHandler : boolean; virtual;
+      function  MustCreateAudioHandler : boolean; virtual;
+      function  MustCreateResourceRequestHandler : boolean; virtual;
+      function  MustCreateCookieAccessFilter : boolean; virtual;
 
     public
       constructor Create(AOwner: TComponent); override;
@@ -1024,22 +1028,7 @@ begin
     if (FHandler = nil) then
       begin
         FIsOSR   := aIsOsr;
-        FHandler := TCustomClientHandler.Create(Self,
-                                                MustCreateLoadHandler,
-                                                MustCreateFocusHandler,
-                                                MustCreateContextMenuHandler,
-                                                MustCreateDialogHandler,
-                                                MustCreateKeyboardHandler,
-                                                MustCreateDisplayHandler,
-                                                MustCreateDownloadHandler,
-                                                MustCreateJsDialogHandler,
-                                                True,
-                                                FIsOSR, // Create the Render Handler in OSR mode only
-                                                True,
-                                                MustCreateDragHandler,
-                                                MustCreateFindHandler,
-                                                MustCreateAudioHandler);
-
+        FHandler := TCustomClientHandler.Create(Self);
         Result   := True;
       end;
   except
@@ -2203,9 +2192,11 @@ begin
       TempManager := FBrowser.Host.RequestContext.GetCookieManager(nil);
 
       if (TempManager <> nil) then
-        begin
+        try
           TempCallback := TCefCustomDeleteCookiesCallback.Create(self);
           Result       := TempManager.DeleteCookies(url, cookieName, TempCallback);
+        finally
+          TempCallback := nil;
         end;
     end;
 end;
@@ -2224,9 +2215,11 @@ begin
         TempFrame := FBrowser.MainFrame;
 
       if (TempFrame <> nil) then
-        begin
+        try
           TempVisitor := TCustomCefStringVisitor.Create(self);
           TempFrame.GetSource(TempVisitor);
+        finally
+          TempVisitor := nil;
         end;
     end;
 end;
@@ -2236,9 +2229,11 @@ var
   TempVisitor : ICefStringVisitor;
 begin
   if Initialized and (aFrame <> nil) then
-    begin
+    try
       TempVisitor := TCustomCefStringVisitor.Create(self);
       aFrame.GetSource(TempVisitor);
+    finally
+      TempVisitor := nil;
     end;
 end;
 
@@ -2255,9 +2250,11 @@ begin
         TempFrame := FBrowser.MainFrame;
 
       if (TempFrame <> nil) then
-        begin
+        try
           TempVisitor := TCustomCefStringVisitor.Create(self);
           TempFrame.GetSource(TempVisitor);
+        finally
+          TempVisitor := nil;
         end;
     end;
 end;
@@ -2276,9 +2273,11 @@ begin
         TempFrame := FBrowser.MainFrame;
 
       if (TempFrame <> nil) then
-        begin
+        try
           TempVisitor := TCustomCefStringVisitor.Create(self);
           TempFrame.GetText(TempVisitor);
+        finally
+          TempVisitor := nil;
         end;
     end;
 end;
@@ -2288,9 +2287,11 @@ var
   TempVisitor : ICefStringVisitor;
 begin
   if Initialized and (aFrame <> nil) then
-    begin
+    try
       TempVisitor := TCustomCefStringVisitor.Create(self);
       aFrame.GetText(TempVisitor);
+    finally
+      TempVisitor := nil;
     end;
 end;
 
@@ -2307,21 +2308,25 @@ begin
         TempFrame := FBrowser.MainFrame;
 
       if (TempFrame <> nil) then
-        begin
+        try
           TempVisitor := TCustomCefStringVisitor.Create(self);
           TempFrame.GetText(TempVisitor);
+        finally
+          TempVisitor := nil;
         end;
     end;
 end;
 
 procedure TChromium.GetNavigationEntries(currentOnly: Boolean);
 var
-  TempVisitor : TCustomCefNavigationEntryVisitor;
+  TempVisitor : ICefNavigationEntryVisitor;
 begin
   if Initialized then
-    begin
+    try
       TempVisitor := TCustomCefNavigationEntryVisitor.Create(self);
       FBrowser.Host.GetNavigationEntries(TempVisitor, currentOnly);
+    finally
+      TempVisitor := nil;
     end;
 end;
 
@@ -2340,9 +2345,11 @@ var
   TempTask: ICefTask;
 begin
   if Initialized then
-    begin
+    try
       TempTask := TCefUpdatePrefsTask.Create(self);
       CefPostTask(TID_UI, TempTask);
+    finally
+      TempTask := nil;
     end;
 end;
 
@@ -2351,10 +2358,12 @@ var
   TempTask: ICefTask;
 begin
   if Initialized and (length(aFileName) > 0) then
-    begin
+    try
       FPrefsFileName := aFileName;
       TempTask       := TCefSavePrefsTask.Create(self);
       CefPostTask(TID_UI, TempTask);
+    finally
+      TempTask := nil;
     end;
 end;
 
@@ -2377,9 +2386,11 @@ var
 begin
   // Results will be received in the OnResolvedHostAvailable event of this class
   if Initialized and (length(aURL) > 0) then
-    begin
+    try
       TempCallback := TCefCustomResolveCallback.Create(self);
       FBrowser.Host.RequestContext.ResolveHost(aURL, TempCallback);
+    finally
+      TempCallback := nil;
     end;
 end;
 
@@ -3059,6 +3070,21 @@ begin
             assigned(FOnDialogClosed);
 end;
 
+function TChromium.MustCreateLifeSpanHandler : boolean;
+begin
+  Result := True;
+end;
+
+function TChromium.MustCreateRenderHandler : boolean;
+begin
+  Result := FIsOSR;
+end;
+
+function TChromium.MustCreateRequestHandler : boolean;
+begin
+  Result := True;
+end;
+
 function TChromium.MustCreateDragHandler : boolean;
 begin
   Result := assigned(FOnDragEnter) or
@@ -3075,6 +3101,23 @@ begin
   Result := assigned(FOnAudioStreamStarted) or
             assigned(FOnAudioStreamPacket)  or
             assigned(FOnAudioStreamStopped);
+end;
+
+function TChromium.MustCreateResourceRequestHandler : boolean;
+begin
+  Result := assigned(FOnBeforeResourceLoad) or
+            assigned(FOnGetResourceHandler) or
+            assigned(FOnResourceRedirect) or
+            assigned(FOnResourceResponse) or
+            assigned(FOnGetResourceResponseFilter) or
+            assigned(FOnResourceLoadComplete) or
+            assigned(FOnProtocolExecution);
+end;
+
+function TChromium.MustCreateCookieAccessFilter : boolean;
+begin
+  Result := assigned(FOnCanSendCookie) or
+            assigned(FOnCanSaveCookie);
 end;
 
 {$IFDEF MSWINDOWS}
@@ -3170,14 +3213,7 @@ begin
           InitializeSettings(FDevBrowserSettings);
           InitializeDevToolsWindowInfo(aDevTools);
 
-          TempClient := TCustomClientHandler.Create(Self, False, False,
-                                                    False, False,
-                                                    MustCreateKeyboardHandler,
-                                                    False, False,
-                                                    False, False,
-                                                    False, False,
-                                                    False, False,
-                                                    False);
+          TempClient := TCustomClientHandler.Create(Self, True);
 
           if (inspectElementAt.x <> low(integer)) and
              (inspectElementAt.y <> low(integer)) then
@@ -3616,14 +3652,14 @@ begin
   if Assigned(FOnFullScreenModeChange) then FOnFullScreenModeChange(Self, browser, fullscreen);
 end;
 
-function TChromium.doOnGetAuthCredentials(const browser  : ICefBrowser;
-                                          const frame    : ICefFrame;
-                                                isProxy  : Boolean;
-                                          const host     : ustring;
-                                                port     : Integer;
-                                          const realm    : ustring;
-                                          const scheme   : ustring;
-                                          const callback : ICefAuthCallback): Boolean;
+function TChromium.doOnGetAuthCredentials(const browser   : ICefBrowser;
+                                          const originUrl : ustring;
+                                                isProxy   : Boolean;
+                                          const host      : ustring;
+                                                port      : Integer;
+                                          const realm     : ustring;
+                                          const scheme    : ustring;
+                                          const callback  : ICefAuthCallback): Boolean;
 begin
   Result := False;
 
@@ -3636,8 +3672,8 @@ begin
         end;
     end
    else
-    if (frame <> nil) and frame.IsMain and Assigned(FOnGetAuthCredentials) then
-      FOnGetAuthCredentials(Self, browser, frame, isProxy, host, port, realm, scheme, callback, Result);
+    if Assigned(FOnGetAuthCredentials) then
+      FOnGetAuthCredentials(Self, browser, originUrl, isProxy, host, port, realm, scheme, callback, Result);
 end;
 
 function TChromium.doCanSendCookie(const browser : ICefBrowser;

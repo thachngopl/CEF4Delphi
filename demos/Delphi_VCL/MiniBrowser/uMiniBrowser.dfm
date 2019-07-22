@@ -286,9 +286,9 @@ object MiniBrowserFrm: TMiniBrowserFrm
     OnAfterCreated = Chromium1AfterCreated
     OnBeforeClose = Chromium1BeforeClose
     OnClose = Chromium1Close
+    OnCertificateError = Chromium1CertificateError
     OnBeforeResourceLoad = Chromium1BeforeResourceLoad
     OnResourceResponse = Chromium1ResourceResponse
-    OnCertificateError = Chromium1CertificateError
     Left = 32
     Top = 224
   end
@@ -354,6 +354,10 @@ object MiniBrowserFrm: TMiniBrowserFrm
     object Downloadimage1: TMenuItem
       Caption = 'Download image...'
       OnClick = Downloadimage1Click
+    end
+    object Simulatekeyboardpresses1: TMenuItem
+      Caption = 'Simulate keyboard presses'
+      OnClick = Simulatekeyboardpresses1Click
     end
     object N5: TMenuItem
       Caption = '-'

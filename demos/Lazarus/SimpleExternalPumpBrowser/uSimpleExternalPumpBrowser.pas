@@ -118,7 +118,8 @@ begin
 
   GlobalCEFApp                           := TCefApplication.Create;
   GlobalCEFApp.ExternalMessagePump       := True;
-  GlobalCEFApp.MultiThreadedMessageLoop  := False;
+  GlobalCEFApp.MultiThreadedMessageLoop  := False;      
+  GlobalCEFApp.DisableFeatures           := 'NetworkService';
   GlobalCEFApp.OnScheduleMessagePumpWork := GlobalCEFApp_OnScheduleMessagePumpWork;
 end;
 
@@ -175,7 +176,7 @@ end;
 procedure TSimpleExternalPumpBrowserFrm.ChromiumWindow1BeforeClose(Sender: TObject);
 begin
   FCanClose := True;
-  Close;
+  PostMessage(Handle, WM_CLOSE, 0, 0);
 end;
 
 procedure TSimpleExternalPumpBrowserFrm.ChromiumWindow1Close(Sender: TObject);

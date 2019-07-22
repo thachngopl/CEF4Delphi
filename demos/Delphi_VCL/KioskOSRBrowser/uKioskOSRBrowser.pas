@@ -174,6 +174,7 @@ begin
   GlobalCEFApp                            := TCefApplication.Create;
   GlobalCEFApp.WindowlessRenderingEnabled := True;
   GlobalCEFApp.EnableHighDPISupport       := True;
+  GlobalCEFApp.DisableFeatures            := 'NetworkService,VizDisplayCompositor';
 end;
 
 procedure TForm1.AppEventsMessage(var Msg: tagMSG; var Handled: Boolean);
@@ -250,7 +251,7 @@ begin
           TempKeyEvent.focus_on_editable_field := ord(False);
 
           chrmosr.SendKeyEvent(@TempKeyEvent);
-          Handled := (Msg.wParam = VK_TAB);
+          Handled := (Msg.wParam in [VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN, VK_TAB]);
         end;
 
     WM_KEYUP :
