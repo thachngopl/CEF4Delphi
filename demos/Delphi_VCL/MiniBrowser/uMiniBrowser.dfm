@@ -269,6 +269,7 @@ object MiniBrowserFrm: TMiniBrowserFrm
     OnNavigationVisitorResultAvailable = Chromium1NavigationVisitorResultAvailable
     OnDownloadImageFinished = Chromium1DownloadImageFinished
     OnCookiesFlushed = Chromium1CookiesFlushed
+    OnExecuteTaskOnCefThread = Chromium1ExecuteTaskOnCefThread
     OnRenderCompMsg = Chromium1RenderCompMsg
     OnLoadEnd = Chromium1LoadEnd
     OnLoadError = Chromium1LoadError
@@ -290,6 +291,7 @@ object MiniBrowserFrm: TMiniBrowserFrm
     OnCertificateError = Chromium1CertificateError
     OnBeforeResourceLoad = Chromium1BeforeResourceLoad
     OnResourceResponse = Chromium1ResourceResponse
+    OnBeforePluginLoad = Chromium1BeforePluginLoad
     Left = 32
     Top = 224
   end
@@ -394,5 +396,10 @@ object MiniBrowserFrm: TMiniBrowserFrm
     OnTimer = Timer1Timer
     Left = 32
     Top = 344
+  end
+  object CEFSentinel1: TCEFSentinel
+    OnClose = CEFSentinel1Close
+    Left = 32
+    Top = 408
   end
 end
