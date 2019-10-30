@@ -183,6 +183,8 @@ type
       FOverrideSpellCheckLang            : string;
       FEnablePrintPreview                : boolean;
       FTouchEvents                       : TCefState;
+      FDisableReadingFromCanvas          : boolean;
+      FHyperlinkAuditing                 : boolean;
 
       FMustCreateResourceBundleHandler   : boolean;
       FMustCreateBrowserProcessHandler   : boolean;
@@ -426,6 +428,8 @@ type
       property DisableSpellChecking              : boolean                             read FDisableSpellChecking              write FDisableSpellChecking;             // --disable-spell-checking
       property OverrideSpellCheckLang            : string                              read FOverrideSpellCheckLang            write FOverrideSpellCheckLang;           // --override-spell-check-lang
       property TouchEvents                       : TCefState                           read FTouchEvents                       write FTouchEvents;                      // --touch-events
+      property DisableReadingFromCanvas          : boolean                             read FDisableReadingFromCanvas          write FDisableReadingFromCanvas;         // --disable-reading-from-canvas
+      property HyperlinkAuditing                 : boolean                             read FHyperlinkAuditing                 write FHyperlinkAuditing;                // --no-pings
 
       // Properties used during the CEF initialization
       property WindowsSandboxInfo                : Pointer                             read FWindowsSandboxInfo                write FWindowsSandboxInfo;
@@ -519,6 +523,33 @@ var
   GlobalCEFApp : TCefApplication = nil;
 
 procedure DestroyGlobalCEFApp;
+
+// *********************************************************
+// ********************** ATTENTION ! **********************
+// *********************************************************
+// **                                                     **
+// **  MANY OF THE EVENTS IN CEF4DELPHI COMPONENTS LIKE   **
+// **  TCHROMIUM, TFMXCHROMIUM OR TCEFAPPLICATION ARE     **
+// **  EXECUTED IN A CEF THREAD BY DEFAULT.               **
+// **                                                     **
+// **  WINDOWS CONTROLS MUST BE CREATED AND DESTROYED IN  **
+// **  THE SAME THREAD TO AVOID ERRORS.                   **
+// **  SOME OF THEM RECREATE THE HANDLERS IF THEY ARE     **
+// **  MODIFIED AND CAN CAUSE THE SAME ERRORS.            **
+// **                                                     **
+// **  DON'T CREATE, MODIFY OR DESTROY WINDOWS CONTROLS   **
+// **  INSIDE THE CEF4DELPHI EVENTS AND USE               **
+// **  SYNCHRONIZATION OBJECTS TO PROTECT VARIABLES AND   **
+// **  FIELDS IF THEY ARE ALSO USED IN THE MAIN THREAD.   **
+// **                                                     **
+// **  READ THIS FOR MORE INFORMATION :                   **
+// **  https://www.briskbard.com/index.php?pageid=cef     **
+// **                                                     **
+// **  USE OUR FORUMS FOR MORE QUESTIONS :                **
+// **  https://www.briskbard.com/forum/                   **
+// **                                                     **
+// *********************************************************
+// *********************************************************
 
 implementation
 
@@ -641,6 +672,8 @@ begin
   FOverrideSpellCheckLang            := '';
   FEnablePrintPreview                := False;
   FTouchEvents                       := STATE_DEFAULT;
+  FDisableReadingFromCanvas          := False;
+  FHyperlinkAuditing                 := True;
 
   FMustCreateResourceBundleHandler := False;
   FMustCreateBrowserProcessHandler := True;
@@ -1558,6 +1591,12 @@ begin
         STATE_ENABLED  : commandLine.AppendSwitchWithValue('--touch-events', 'enabled');
         STATE_DISABLED : commandLine.AppendSwitchWithValue('--touch-events', 'disabled');
       end;
+
+      if FDisableReadingFromCanvas then
+        commandLine.AppendSwitch('--disable-reading-from-canvas');
+
+      if not(FHyperlinkAuditing) then
+        commandLine.AppendSwitch('--no-pings');
 
       case FAutoplayPolicy of
         appDocumentUserActivationRequired    :
