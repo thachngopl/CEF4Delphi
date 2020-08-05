@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Díaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Díaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -61,7 +61,6 @@ type
   { TURLRequestFrm }
 
   TURLRequestFrm = class(TForm)
-    CEFSentinel1: TCEFSentinel;
     StatusBar1: TStatusBar;
     SaveDialog1: TSaveDialog;
     CEFUrlRequestClientComponent1: TCEFUrlRequestClientComponent;
@@ -205,8 +204,7 @@ end;
 
 procedure TURLRequestFrm.CEFSentinel1Close(Sender: TObject);
 begin
-  FCanClose := True;
-  PostMessage(Handle, WM_CLOSE, 0, 0);
+
 end;
 
 procedure TURLRequestFrm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
@@ -358,7 +356,10 @@ begin
   // Use request.response here to get a ICefResponse interface with all the response headers, status, error code, etc.
 
   if FClosing then
-    CEFSentinel1.Start
+    begin
+      FCanClose := True;
+      PostMessage(Handle, WM_CLOSE, 0, 0);
+    end
    else
     if (request <> nil) and (request.RequestStatus = UR_SUCCESS) then
       PostMessage(Handle, URLREQUEST_SUCCESS, 0, 0)

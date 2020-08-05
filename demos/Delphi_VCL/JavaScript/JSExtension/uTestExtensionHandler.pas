@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -53,7 +53,7 @@ uses
 type
   TTestExtensionHandler = class(TCefv8HandlerOwn)
     protected
-      function Execute(const name: ustring; const obj: ICefv8Value; const arguments: TCefv8ValueArray; var retval: ICefv8Value; var exception: ustring): Boolean; override;
+      function Execute(const name: ustring; const object_: ICefv8Value; const arguments: TCefv8ValueArray; var retval: ICefv8Value; var exception: ustring): Boolean; override;
   end;
 
 implementation
@@ -62,7 +62,7 @@ uses
   uCEFMiscFunctions, uCEFConstants, uJSExtension;
 
 function TTestExtensionHandler.Execute(const name      : ustring;
-                                       const obj       : ICefv8Value;
+                                       const object_   : ICefv8Value;
                                        const arguments : TCefv8ValueArray;
                                        var   retval    : ICefv8Value;
                                        var   exception : ustring): Boolean;

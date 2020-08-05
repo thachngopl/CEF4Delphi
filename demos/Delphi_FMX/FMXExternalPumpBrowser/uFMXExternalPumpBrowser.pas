@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -52,7 +52,7 @@ uses
   FMX.Graphics,
   {$ENDIF}
   uCEFFMXChromium, uCEFFMXBufferPanel, uCEFFMXWorkScheduler,
-  uCEFInterfaces, uCEFTypes, uCEFConstants;
+  uCEFInterfaces, uCEFTypes, uCEFConstants, uCEFChromiumCore, FMX.Layouts;
 
 type
   TFMXExternalPumpBrowserFrm = class(TForm)
@@ -60,11 +60,11 @@ type
     AddressEdt: TEdit;
     chrmosr: TFMXChromium;
     Timer1: TTimer;
-    Panel2: TPanel;
-    GoBtn: TButton;
-    SnapshotBtn: TButton;
     SaveDialog1: TSaveDialog;
     Panel1: TFMXBufferPanel;
+    Layout1: TLayout;
+    GoBtn: TButton;
+    SnapshotBtn: TButton;
 
     procedure GoBtnClick(Sender: TObject);
     procedure GoBtnEnter(Sender: TObject);
@@ -78,8 +78,8 @@ type
     procedure Panel1MouseMove(Sender: TObject; Shift: TShiftState; X, Y: Single);
     procedure Panel1MouseLeave(Sender: TObject);
     procedure Panel1MouseWheel(Sender: TObject; Shift: TShiftState; WheelDelta: Integer; var Handled: Boolean);
-    procedure Panel1KeyUp(Sender: TObject; var Key: Word; var KeyChar: Char; Shift: TShiftState);
     procedure Panel1KeyDown(Sender: TObject; var Key: Word; var KeyChar: Char; Shift: TShiftState);
+    procedure Panel1DialogKey(Sender: TObject; var Key: Word; Shift: TShiftState);
 
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
@@ -87,7 +87,7 @@ type
     procedure FormHide(Sender: TObject);
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
 
-    procedure chrmosrPaint(Sender: TObject; const browser: ICefBrowser; kind: TCefPaintElementType; dirtyRectsCount: NativeUInt; const dirtyRects: PCefRectArray; const buffer: Pointer; width, height: Integer);
+    procedure chrmosrPaint(Sender: TObject; const browser: ICefBrowser; type_: TCefPaintElementType; dirtyRectsCount: NativeUInt; const dirtyRects: PCefRectArray; const buffer: Pointer; width, height: Integer);
     procedure chrmosrCursorChange(Sender: TObject; const browser: ICefBrowser; cursor: HICON; cursorType: TCefCursorType; const customCursorInfo: PCefCursorInfo);
     procedure chrmosrGetViewRect(Sender: TObject; const browser: ICefBrowser; var rect: TCefRect);
     procedure chrmosrGetScreenPoint(Sender: TObject; const browser: ICefBrowser; viewX, viewY: Integer; var screenX, screenY: Integer; out Result: Boolean);
@@ -101,6 +101,7 @@ type
 
     procedure Timer1Timer(Sender: TObject);
     procedure AddressEdtEnter(Sender: TObject);
+
     procedure SnapshotBtnClick(Sender: TObject);
     procedure SnapshotBtnEnter(Sender: TObject);
 
@@ -113,6 +114,7 @@ type
     FCanClose          : boolean;
     FClosing           : boolean;
     FResizeCS          : TCriticalSection;
+    FAtLeastWin8       : boolean;
     {$IFDEF DELPHI17_UP}
     FMouseWheelService : IFMXMouseService;
     {$ENDIF}
@@ -125,18 +127,30 @@ type
     procedure LoadURL;
     function  getModifiers(Shift: TShiftState): TCefEventFlags;
     function  GetButton(Button: TMouseButton): TCefMouseButtonType;
-    function  SendCompMessage(aMsg : cardinal; wParam : cardinal = 0; lParam : integer = 0) : boolean;
+    function  GetMousePosition(var aPoint : TPointF) : boolean;
     procedure InitializeLastClick;
     function  CancelPreviousClick(const x, y : single; var aCurrentTime : integer) : boolean;
+    {$IFDEF MSWINDOWS}
+    function  SendCompMessage(aMsg : cardinal; aWParam : WPARAM = 0; aLParam : LPARAM = 0) : boolean;
+    function  ArePointerEventsSupported : boolean;
+    function  HandlePenEvent(const aID : uint32; aMsg : cardinal) : boolean;
+    function  HandleTouchEvent(const aID : uint32; aMsg : cardinal) : boolean; overload;
+    function  HandlePointerEvent(const aMessage : TMsg) : boolean;
+    {$ENDIF}
 
   public
     procedure DoResize;
-    procedure DoBrowserCreated;
     procedure NotifyMoveOrResizeStarted;
     procedure SendCaptureLostEvent;
+    procedure SetBounds(ALeft: Integer; ATop: Integer; AWidth: Integer; AHeight: Integer); override;
+    {$IFDEF MSWINDOWS}
     procedure HandleSYSCHAR(const aMessage : TMsg);
     procedure HandleSYSKEYDOWN(const aMessage : TMsg);
     procedure HandleSYSKEYUP(const aMessage : TMsg);
+    procedure HandleKEYDOWN(const aMessage : TMsg);
+    procedure HandleKEYUP(const aMessage : TMsg);
+    function  HandlePOINTER(const aMessage : TMsg) : boolean;
+    {$ENDIF}
   end;
 
 var
@@ -163,11 +177,12 @@ var
 // Project -> Options -> Building -> Delphi compiler -> Conditional defines (All configurations)
 
 // This is the destruction sequence in OSR mode :
-// 1- FormCloseQuery sets CanClose to the initial FCanClose value (False) and calls chrmosr.CloseBrowser(True).
-// 2- chrmosr.CloseBrowser(True) will trigger chrmosr.OnClose and we have to
-//    set "Result" to false and CEF will destroy the internal browser immediately.
-// 3- chrmosr.OnBeforeClose is triggered because the internal browser was destroyed.
-//    Now we set FCanClose to True and send WM_CLOSE to the form.
+// 1- FormCloseQuery sets CanClose to the initial FCanClose value (False) and
+//    calls chrmosr.CloseBrowser(True).
+// 2- chrmosr.CloseBrowser(True) will trigger chrmosr.OnClose and the default
+//    implementation will destroy the internal browser immediately, which will
+//    trigger the chrmosr.OnBeforeClose event.
+// 3- chrmosr.OnBeforeClose sets FCanClose to True and closes the form.
 
 procedure CreateGlobalCEFApp;
 
@@ -199,6 +214,9 @@ begin
   GlobalCEFApp.ExternalMessagePump        := True;
   GlobalCEFApp.MultiThreadedMessageLoop   := False;
   GlobalCEFApp.OnScheduleMessagePumpWork  := GlobalCEFApp_OnScheduleMessagePumpWork;
+  //GlobalCEFApp.EnableGPU                  := True;
+  //GlobalCEFApp.LogFile                    := 'debug.log';
+  //GlobalCEFApp.LogSeverity                := LOGSEVERITY_INFO;
 end;
 
 procedure TFMXExternalPumpBrowserFrm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
@@ -215,6 +233,8 @@ begin
 end;
 
 procedure TFMXExternalPumpBrowserFrm.FormCreate(Sender: TObject);
+var
+  TempMajorVer, TempMinorVer : DWORD;
 begin
   TFMXApplicationService.AddPlatformService;
 
@@ -226,6 +246,16 @@ begin
   FCanClose       := False;
   FClosing        := False;
   FResizeCS       := TCriticalSection.Create;
+
+  {$IFDEF MSWINDOWS}
+  FAtLeastWin8 := GetWindowsMajorMinorVersion(TempMajorVer, TempMinorVer) and
+                  ((TempMajorVer > 6) or
+                   ((TempMajorVer = 6) and (TempMinorVer >= 2)));
+  {$ELSE}
+  FAtLeastWin8 := False;
+  {$ENDIF}
+
+  chrmosr.DefaultURL := AddressEdt.Text;
 
   InitializeLastClick;
 
@@ -288,6 +318,12 @@ begin
   Panel1.SetFocus;
 end;
 
+procedure TFMXExternalPumpBrowserFrm.Panel1DialogKey(Sender: TObject;
+  var Key: Word; Shift: TShiftState);
+begin
+  if (Key = vkTab) then Key := 0;
+end;
+
 procedure TFMXExternalPumpBrowserFrm.Panel1Enter(Sender: TObject);
 begin
   chrmosr.SendFocusEvent(True);
@@ -298,40 +334,14 @@ begin
   chrmosr.SendFocusEvent(False);
 end;
 
-procedure TFMXExternalPumpBrowserFrm.Panel1KeyDown(Sender : TObject;
+procedure TFMXExternalPumpBrowserFrm.Panel1KeyDown(    Sender  : TObject;
                                                    var Key     : Word;
                                                    var KeyChar : Char;
                                                        Shift   : TShiftState);
 var
   TempKeyEvent : TCefKeyEvent;
 begin
-  if not(Panel1.IsFocused) or (chrmosr = nil) then exit;
-
-  if (Key <> 0) and (KeyChar = #0) then
-    begin
-      TempKeyEvent.kind                    := KEYEVENT_RAWKEYDOWN;
-      TempKeyEvent.modifiers               := getModifiers(Shift);
-      TempKeyEvent.windows_key_code        := Key;
-      TempKeyEvent.native_key_code         := 0;
-      TempKeyEvent.is_system_key           := ord(False);
-      TempKeyEvent.character               := #0;
-      TempKeyEvent.unmodified_character    := #0;
-      TempKeyEvent.focus_on_editable_field := ord(False);
-
-      chrmosr.SendKeyEvent(@TempKeyEvent);
-
-      if (Key in [VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN, VK_TAB]) then Key := 0;
-    end;
-end;
-
-procedure TFMXExternalPumpBrowserFrm.Panel1KeyUp(Sender : TObject;
-                                                 var Key     : Word;
-                                                 var KeyChar : Char;
-                                                     Shift   : TShiftState);
-var
-  TempKeyEvent : TCefKeyEvent;
-begin
-  if not(Panel1.IsFocused) or (chrmosr = nil) then exit;
+  if not(Panel1.IsFocused) then exit;
 
   if (Key = 0) and (KeyChar <> #0) then
     begin
@@ -347,19 +357,9 @@ begin
       chrmosr.SendKeyEvent(@TempKeyEvent);
     end
    else
-    if (Key <> 0) and (KeyChar = #0) then
-      begin
-        TempKeyEvent.kind                    := KEYEVENT_KEYUP;
-        TempKeyEvent.modifiers               := getModifiers(Shift);
-        TempKeyEvent.windows_key_code        := Key;
-        TempKeyEvent.native_key_code         := 0;
-        TempKeyEvent.is_system_key           := ord(False);
-        TempKeyEvent.character               := #0;
-        TempKeyEvent.unmodified_character    := #0;
-        TempKeyEvent.focus_on_editable_field := ord(False);
-
-        chrmosr.SendKeyEvent(@TempKeyEvent);
-      end;
+    if (Key <> 0) and (KeyChar = #0) and
+       (Key in [vkLeft, vkRight, vkUp, vkDown]) then
+      Key := 0;
 end;
 
 procedure TFMXExternalPumpBrowserFrm.Panel1MouseDown(Sender : TObject;
@@ -370,7 +370,7 @@ var
   TempEvent : TCefMouseEvent;
   TempTime  : integer;
 begin
-  if (GlobalCEFApp <> nil) and (chrmosr <> nil) then
+  if not(ssTouch in Shift) then
     begin
       Panel1.SetFocus;
 
@@ -393,21 +393,40 @@ begin
     end;
 end;
 
+function TFMXExternalPumpBrowserFrm.GetMousePosition(var aPoint : TPointF) : boolean;
+begin
+  {$IFDEF DELPHI17_UP}
+  if (FMouseWheelService <> nil) then
+    begin
+      aPoint := FMouseWheelService.GetMousePos;
+      Result := True;
+    end
+   else
+    begin
+      aPoint.x := 0;
+      aPoint.y := 0;
+      Result   := False;
+    end;
+  {$ELSE}
+  TempPointF := Platform.GetMousePos;
+  Result     := True;
+  {$ENDIF}
+end;
+
 procedure TFMXExternalPumpBrowserFrm.Panel1MouseLeave(Sender: TObject);
 var
-  TempEvent : TCefMouseEvent;
-  TempPoint : TPoint;
-  TempTime  : integer;
+  TempEvent  : TCefMouseEvent;
+  TempPoint  : TPointF;
+  TempTime   : integer;
 begin
-  if (GlobalCEFApp <> nil) and (chrmosr <> nil) then
+  if GetMousePosition(TempPoint) then
     begin
-      GetCursorPos(TempPoint);
-      TempPoint := Panel1.ScreenToclient(TempPoint);
+      TempPoint := Panel1.ScreenToClient(TempPoint);
 
       if CancelPreviousClick(TempPoint.x, TempPoint.y, TempTime) then InitializeLastClick;
 
-      TempEvent.x         := TempPoint.x;
-      TempEvent.y         := TempPoint.y;
+      TempEvent.x         := round(TempPoint.x);
+      TempEvent.y         := round(TempPoint.y);
       TempEvent.modifiers := GetCefMouseModifiers;
       chrmosr.SendMouseMoveEvent(@TempEvent, True);
     end;
@@ -420,12 +439,12 @@ var
   TempEvent : TCefMouseEvent;
   TempTime  : integer;
 begin
-  if (GlobalCEFApp <> nil) and (chrmosr <> nil) then
+  if not(ssTouch in Shift) then
     begin
       if CancelPreviousClick(x, y, TempTime) then InitializeLastClick;
 
-      TempEvent.x         := round(X);
-      TempEvent.y         := round(Y);
+      TempEvent.x         := round(x);
+      TempEvent.y         := round(y);
       TempEvent.modifiers := getModifiers(Shift);
       chrmosr.SendMouseMoveEvent(@TempEvent, False);
     end;
@@ -438,7 +457,7 @@ procedure TFMXExternalPumpBrowserFrm.Panel1MouseUp(Sender : TObject;
 var
   TempEvent : TCefMouseEvent;
 begin
-  if (GlobalCEFApp <> nil) and (chrmosr <> nil) then
+  if not(ssTouch in Shift) then
     begin
       TempEvent.x         := round(X);
       TempEvent.y         := round(Y);
@@ -447,27 +466,19 @@ begin
     end;
 end;
 
-procedure TFMXExternalPumpBrowserFrm.Panel1MouseWheel(Sender      : TObject;
-                                                      Shift       : TShiftState;
-                                                      WheelDelta  : Integer;
-                                                      var Handled : Boolean);
+procedure TFMXExternalPumpBrowserFrm.Panel1MouseWheel(    Sender      : TObject;
+                                                          Shift       : TShiftState;
+                                                          WheelDelta  : Integer;
+                                                      var Handled     : Boolean);
 var
-  TempEvent  : TCefMouseEvent;
-  TempPointF : TPointF;
+  TempEvent : TCefMouseEvent;
+  TempPoint : TPointF;
 begin
-  if Panel1.IsFocused and (GlobalCEFApp <> nil) and (chrmosr <> nil) then
+  if Panel1.IsFocused and GetMousePosition(TempPoint) then
     begin
-      {$IFDEF DELPHI17_UP}
-      if (FMouseWheelService <> nil) then
-        TempPointF := FMouseWheelService.GetMousePos
-       else
-        exit;
-      {$ELSE}
-      TempPointF := Platform.GetMousePos;
-      {$ENDIF}
-
-      TempEvent.x         := round(TempPointF.x);
-      TempEvent.y         := round(TempPointF.y);
+      TempPoint           := Panel1.ScreenToClient(TempPoint);
+      TempEvent.x         := round(TempPoint.x);
+      TempEvent.y         := round(TempPoint.y);
       TempEvent.modifiers := getModifiers(Shift);
       chrmosr.SendMouseWheelEvent(@TempEvent, 0, WheelDelta);
     end;
@@ -491,18 +502,26 @@ begin
   chrmosr.SendFocusEvent(False);
 end;
 
-procedure TFMXExternalPumpBrowserFrm.chrmosrAfterCreated(Sender: TObject;
-  const browser: ICefBrowser);
+procedure TFMXExternalPumpBrowserFrm.chrmosrAfterCreated(Sender: TObject; const browser: ICefBrowser);
 begin
-  // Now the browser is fully initialized we can send a message to the
-  // main form to load the initial web page.
-  SendCompMessage(CEF_AFTERCREATED);
+  // Now the browser is fully initialized we can enable the UI.
+  Caption            := 'FMX External Pump Browser';
+  AddressPnl.Enabled := True;
+  Panel1.SetFocus;
 end;
 
 procedure TFMXExternalPumpBrowserFrm.chrmosrBeforeClose(Sender: TObject; const browser: ICefBrowser);
 begin
   FCanClose := True;
+
+  {$IFDEF MSWINDOWS}
   SendCompMessage(WM_CLOSE);
+  {$ELSE}
+  TThread.Queue(nil, procedure
+                     begin
+                       close
+                     end);
+  {$ENDIF}
 end;
 
 procedure TFMXExternalPumpBrowserFrm.chrmosrBeforePopup(      Sender             : TObject;
@@ -524,7 +543,8 @@ begin
   Result := (targetDisposition in [WOD_NEW_FOREGROUND_TAB, WOD_NEW_BACKGROUND_TAB, WOD_NEW_POPUP, WOD_NEW_WINDOW]);
 end;
 
-procedure TFMXExternalPumpBrowserFrm.chrmosrCursorChange(Sender : TObject;
+// TO-DO: The "cursor" parameter should be TCefCursorHandle but Delphi shows a warning if it's not declared as HICON.
+procedure TFMXExternalPumpBrowserFrm.chrmosrCursorChange(      Sender           : TObject;
                                                          const browser          : ICefBrowser;
                                                                cursor           : HICON;
                                                                cursorType       : TCefCursorType;
@@ -533,34 +553,29 @@ begin
   Panel1.Cursor := CefCursorToWindowsCursor(cursorType);
 end;
 
-procedure TFMXExternalPumpBrowserFrm.chrmosrGetScreenInfo(Sender : TObject;
+procedure TFMXExternalPumpBrowserFrm.chrmosrGetScreenInfo(      Sender     : TObject;
                                                           const browser    : ICefBrowser;
                                                           var   screenInfo : TCefScreenInfo;
                                                           out   Result     : Boolean);
 var
   TempRect : TCEFRect;
 begin
-  if (GlobalCEFApp <> nil) then
-    begin
-      TempRect.x      := 0;
-      TempRect.y      := 0;
-      TempRect.width  := round(Panel1.Width);
-      TempRect.height := round(Panel1.Height);
+  TempRect.x      := 0;
+  TempRect.y      := 0;
+  TempRect.width  := round(Panel1.Width);
+  TempRect.height := round(Panel1.Height);
 
-      screenInfo.device_scale_factor := GlobalCEFApp.DeviceScaleFactor;
-      screenInfo.depth               := 0;
-      screenInfo.depth_per_component := 0;
-      screenInfo.is_monochrome       := Ord(False);
-      screenInfo.rect                := TempRect;
-      screenInfo.available_rect      := TempRect;
+  screenInfo.device_scale_factor := Panel1.ScreenScale;
+  screenInfo.depth               := 0;
+  screenInfo.depth_per_component := 0;
+  screenInfo.is_monochrome       := Ord(False);
+  screenInfo.rect                := TempRect;
+  screenInfo.available_rect      := TempRect;
 
-      Result := True;
-    end
-   else
-    Result := False;
+  Result := True;
 end;
 
-procedure TFMXExternalPumpBrowserFrm.chrmosrGetScreenPoint(Sender : TObject;
+procedure TFMXExternalPumpBrowserFrm.chrmosrGetScreenPoint(      Sender  : TObject;
                                                            const browser : ICefBrowser;
                                                                  viewX   : Integer;
                                                                  viewY   : Integer;
@@ -570,35 +585,28 @@ procedure TFMXExternalPumpBrowserFrm.chrmosrGetScreenPoint(Sender : TObject;
 var
   TempScreenPt, TempViewPt : TPoint;
 begin
-  if (GlobalCEFApp <> nil) then
-    begin
-      TempViewPt.x := LogicalToDevice(viewX, GlobalCEFApp.DeviceScaleFactor);
-      TempViewPt.y := LogicalToDevice(viewY, GlobalCEFApp.DeviceScaleFactor);
-      TempScreenPt := Panel1.ClientToScreen(TempViewPt);
-      screenX      := TempScreenPt.x;
-      screenY      := TempScreenPt.y;
-      Result       := True;
-    end
-   else
-    Result := False;
+  // TFMXBufferPanel.ClientToScreen applies the scale factor. No need to call LogicalToDevice to set TempViewPt.
+  TempViewPt.x := viewX;
+  TempViewPt.y := viewY;
+  TempScreenPt := Panel1.ClientToScreen(TempViewPt);
+  screenX      := TempScreenPt.x;
+  screenY      := TempScreenPt.y;
+  Result       := True;
 end;
 
-procedure TFMXExternalPumpBrowserFrm.chrmosrGetViewRect(Sender : TObject;
+procedure TFMXExternalPumpBrowserFrm.chrmosrGetViewRect(      Sender  : TObject;
                                                         const browser : ICefBrowser;
                                                         var   rect    : TCefRect);
 begin
-  if (GlobalCEFApp <> nil) then
-    begin
-      rect.x      := 0;
-      rect.y      := 0;
-      rect.width  := round(Panel1.Width);
-      rect.height := round(Panel1.Height);
-    end;
+  rect.x      := 0;
+  rect.y      := 0;
+  rect.width  := round(Panel1.Width);
+  rect.height := round(Panel1.Height);
 end;
 
-procedure TFMXExternalPumpBrowserFrm.chrmosrPaint(Sender : TObject;
+procedure TFMXExternalPumpBrowserFrm.chrmosrPaint(      Sender          : TObject;
                                                   const browser         : ICefBrowser;
-                                                        kind            : TCefPaintElementType;
+                                                        type_           : TCefPaintElementType;
                                                         dirtyRectsCount : NativeUInt;
                                                   const dirtyRects      : PCefRectArray;
                                                   const buffer          : Pointer;
@@ -615,6 +623,7 @@ var
   TempForcedResize : boolean;
   TempBitmapData : TBitmapData;
   TempBitmap : TBitmap;
+  TempSrcRect, TempDstRect : TRectF;
 begin
   try
     FResizeCS.Acquire;
@@ -622,7 +631,7 @@ begin
 
     if Panel1.BeginBufferDraw then
       try
-        if (kind = PET_POPUP) then
+        if (type_ = PET_POPUP) then
           begin
             if (FPopUpBitmap = nil) or
                (width  <> FPopUpBitmap.Width) or
@@ -719,12 +728,30 @@ begin
             end;
 
             if FShowPopup and (FPopUpBitmap <> nil) then
-              Panel1.BufferDraw(FPopUpRect.Left, FPopUpRect.Top, FPopUpBitmap);
+              begin
+                TempSrcRect := RectF(0, 0,
+                                     min(FPopUpRect.Width,  FPopUpBitmap.Width),
+                                     min(FPopUpRect.Height, FPopUpBitmap.Height));
+
+                TempDstRect.Left   := FPopUpRect.Left / GlobalCEFApp.DeviceScaleFactor;
+                TempDstRect.Top    := FPopUpRect.Top  / GlobalCEFApp.DeviceScaleFactor;
+                TempDstRect.Right  := TempDstRect.Left + (TempSrcRect.Width  / GlobalCEFApp.DeviceScaleFactor);
+                TempDstRect.Bottom := TempDstRect.Top  + (TempSrcRect.Height / GlobalCEFApp.DeviceScaleFactor);
+
+                Panel1.BufferDraw(FPopUpBitmap, TempSrcRect, TempDstRect);
+              end;
           end;
 
-        if (kind = PET_VIEW) then
+        if (type_ = PET_VIEW) then
           begin
-            if TempForcedResize or FPendingResize then SendCompMessage(CEF_PENDINGRESIZE);
+            if TempForcedResize or FPendingResize then
+              begin
+                {$IFDEF MSWINDOWS}
+                SendCompMessage(CEF_PENDINGRESIZE);
+                {$ELSE}
+                TThread.Queue(nil, DoResize);
+                {$ENDIF}
+              end;
 
             FResizing      := False;
             FPendingResize := False;
@@ -737,7 +764,9 @@ begin
   end;
 end;
 
-procedure TFMXExternalPumpBrowserFrm.chrmosrPopupShow(Sender: TObject; const browser: ICefBrowser; show: Boolean);
+procedure TFMXExternalPumpBrowserFrm.chrmosrPopupShow(      Sender  : TObject;
+                                                      const browser : ICefBrowser;
+                                                            show    : Boolean);
 begin
   if show then
     FShowPopUp := True
@@ -746,22 +775,29 @@ begin
       FShowPopUp := False;
       FPopUpRect := rect(0, 0, 0, 0);
 
-      if (chrmosr <> nil) then chrmosr.Invalidate(PET_VIEW);
+      chrmosr.Invalidate(PET_VIEW);
     end;
 end;
 
-procedure TFMXExternalPumpBrowserFrm.chrmosrPopupSize(Sender: TObject; const browser: ICefBrowser; const rect: PCefRect);
+procedure TFMXExternalPumpBrowserFrm.chrmosrPopupSize(      Sender  : TObject;
+                                                      const browser : ICefBrowser;
+                                                      const rect    : PCefRect);
 begin
   if (GlobalCEFApp <> nil) then
     begin
+      LogicalToDevice(rect^, GlobalCEFApp.DeviceScaleFactor);
+
       FPopUpRect.Left   := rect.x;
       FPopUpRect.Top    := rect.y;
-      FPopUpRect.Right  := rect.x + LogicalToDevice(rect.width,  GlobalCEFApp.DeviceScaleFactor)  - 1;
-      FPopUpRect.Bottom := rect.y + LogicalToDevice(rect.height, GlobalCEFApp.DeviceScaleFactor) - 1;
+      FPopUpRect.Right  := rect.x + rect.width  - 1;
+      FPopUpRect.Bottom := rect.y + rect.height - 1;
     end;
 end;
 
-procedure TFMXExternalPumpBrowserFrm.chrmosrTooltip(Sender: TObject; const browser: ICefBrowser; var text: ustring; out Result: Boolean);
+procedure TFMXExternalPumpBrowserFrm.chrmosrTooltip(      Sender  : TObject;
+                                                    const browser : ICefBrowser;
+                                                    var   text    : ustring;
+                                                    out   Result  : Boolean);
 begin
   Panel1.Hint     := text;
   Panel1.ShowHint := (length(text) > 0);
@@ -791,6 +827,17 @@ begin
   end;
 end;
 
+procedure TFMXExternalPumpBrowserFrm.SetBounds(ALeft, ATop, AWidth, AHeight: Integer);
+var
+  PositionChanged: Boolean;
+begin
+  PositionChanged := (ALeft <> Left) or (ATop <> Top);
+
+  inherited SetBounds(ALeft, ATop, AWidth, AHeight);
+
+  if PositionChanged then NotifyMoveOrResizeStarted;
+end;
+
 procedure TFMXExternalPumpBrowserFrm.NotifyMoveOrResizeStarted;
 begin
   if (chrmosr <> nil) then chrmosr.NotifyMoveOrResizeStarted;
@@ -799,71 +846,6 @@ end;
 procedure TFMXExternalPumpBrowserFrm.SendCaptureLostEvent;
 begin
   if (chrmosr <> nil) then chrmosr.SendCaptureLostEvent;
-end;
-
-procedure TFMXExternalPumpBrowserFrm.HandleSYSCHAR(const aMessage : TMsg);
-var
-  TempKeyEvent : TCefKeyEvent;
-begin
-  if Panel1.IsFocused and (aMessage.wParam in [VK_BACK..VK_HELP]) then
-    begin
-      TempKeyEvent.kind                    := KEYEVENT_CHAR;
-      TempKeyEvent.modifiers               := GetCefKeyboardModifiers(aMessage.wParam, aMessage.lParam);
-      TempKeyEvent.windows_key_code        := aMessage.wParam;
-      TempKeyEvent.native_key_code         := aMessage.lParam;
-      TempKeyEvent.is_system_key           := ord(True);
-      TempKeyEvent.character               := #0;
-      TempKeyEvent.unmodified_character    := #0;
-      TempKeyEvent.focus_on_editable_field := ord(False);
-
-      chrmosr.SendKeyEvent(@TempKeyEvent);
-    end;
-end;
-
-procedure TFMXExternalPumpBrowserFrm.HandleSYSKEYDOWN(const aMessage : TMsg);
-var
-  TempKeyEvent : TCefKeyEvent;
-begin
-  if Panel1.IsFocused and (aMessage.wParam in [VK_BACK..VK_HELP]) then
-    begin
-      TempKeyEvent.kind                    := KEYEVENT_RAWKEYDOWN;
-      TempKeyEvent.modifiers               := GetCefKeyboardModifiers(aMessage.wParam, aMessage.lParam);
-      TempKeyEvent.windows_key_code        := aMessage.wParam;
-      TempKeyEvent.native_key_code         := aMessage.lParam;
-      TempKeyEvent.is_system_key           := ord(True);
-      TempKeyEvent.character               := #0;
-      TempKeyEvent.unmodified_character    := #0;
-      TempKeyEvent.focus_on_editable_field := ord(False);
-
-      chrmosr.SendKeyEvent(@TempKeyEvent);
-    end;
-end;
-
-procedure TFMXExternalPumpBrowserFrm.HandleSYSKEYUP(const aMessage : TMsg);
-var
-  TempKeyEvent : TCefKeyEvent;
-begin
-  if Panel1.IsFocused and (aMessage.wParam in [VK_BACK..VK_HELP]) then
-    begin
-      TempKeyEvent.kind                    := KEYEVENT_KEYUP;
-      TempKeyEvent.modifiers               := GetCefKeyboardModifiers(aMessage.wParam, aMessage.lParam);
-      TempKeyEvent.windows_key_code        := aMessage.wParam;
-      TempKeyEvent.native_key_code         := aMessage.lParam;
-      TempKeyEvent.is_system_key           := ord(True);
-      TempKeyEvent.character               := #0;
-      TempKeyEvent.unmodified_character    := #0;
-      TempKeyEvent.focus_on_editable_field := ord(False);
-
-      chrmosr.SendKeyEvent(@TempKeyEvent);
-    end;
-end;
-
-procedure TFMXExternalPumpBrowserFrm.DoBrowserCreated;
-begin
-  Caption            := 'FMX External Pump Browser';
-  AddressPnl.Enabled := True;
-  Panel1.SetFocus;
-  LoadURL;
 end;
 
 function TFMXExternalPumpBrowserFrm.getModifiers(Shift: TShiftState): TCefEventFlags;
@@ -887,23 +869,9 @@ begin
   end;
 end;
 
-function TFMXExternalPumpBrowserFrm.SendCompMessage(aMsg, wParam : cardinal; lParam : integer) : boolean;
-{$IFDEF MSWINDOWS}
-var
-  TempHandle : TWinWindowHandle;
-{$ENDIF}
-begin
-  {$IFDEF MSWINDOWS}
-  TempHandle := WindowHandleToPlatform(Handle);
-  Result     := WinApi.Windows.PostMessage(TempHandle.Wnd, aMsg, wParam, lParam);
-  {$ELSE}
-  Result := False;
-  {$ENDIF}
-end;
-
 procedure TFMXExternalPumpBrowserFrm.InitializeLastClick;
 begin
-  FLastClickCount   := 0;
+  FLastClickCount   := 1;
   FLastClickTime    := 0;
   FLastClickPoint.x := 0;
   FLastClickPoint.y := 0;
@@ -933,5 +901,264 @@ procedure TFMXExternalPumpBrowserFrm.SnapshotBtnEnter(Sender: TObject);
 begin
   chrmosr.SendFocusEvent(False);
 end;
+
+{$IFDEF MSWINDOWS}
+procedure TFMXExternalPumpBrowserFrm.HandleSYSCHAR(const aMessage : TMsg);
+var
+  TempKeyEvent : TCefKeyEvent;
+begin
+  if Panel1.IsFocused and (aMessage.wParam in [VK_BACK..VK_HELP]) then
+    begin
+      TempKeyEvent.kind                    := KEYEVENT_CHAR;
+      TempKeyEvent.modifiers               := GetCefKeyboardModifiers(aMessage.wParam, aMessage.lParam);
+      TempKeyEvent.windows_key_code        := integer(aMessage.wParam);
+      TempKeyEvent.native_key_code         := integer(aMessage.lParam);
+      TempKeyEvent.is_system_key           := ord(True);
+      TempKeyEvent.character               := #0;
+      TempKeyEvent.unmodified_character    := #0;
+      TempKeyEvent.focus_on_editable_field := ord(False);
+
+      chrmosr.SendKeyEvent(@TempKeyEvent);
+    end;
+end;
+
+procedure TFMXExternalPumpBrowserFrm.HandleSYSKEYDOWN(const aMessage : TMsg);
+var
+  TempKeyEvent : TCefKeyEvent;
+begin
+  if Panel1.IsFocused and (aMessage.wParam in [VK_BACK..VK_HELP]) then
+    begin
+      TempKeyEvent.kind                    := KEYEVENT_RAWKEYDOWN;
+      TempKeyEvent.modifiers               := GetCefKeyboardModifiers(aMessage.wParam, aMessage.lParam);
+      TempKeyEvent.windows_key_code        := integer(aMessage.wParam);
+      TempKeyEvent.native_key_code         := integer(aMessage.lParam);
+      TempKeyEvent.is_system_key           := ord(True);
+      TempKeyEvent.character               := #0;
+      TempKeyEvent.unmodified_character    := #0;
+      TempKeyEvent.focus_on_editable_field := ord(False);
+
+      chrmosr.SendKeyEvent(@TempKeyEvent);
+    end;
+end;
+
+procedure TFMXExternalPumpBrowserFrm.HandleSYSKEYUP(const aMessage : TMsg);
+var
+  TempKeyEvent : TCefKeyEvent;
+begin
+  if Panel1.IsFocused and (aMessage.wParam in [VK_BACK..VK_HELP]) then
+    begin
+      TempKeyEvent.kind                    := KEYEVENT_KEYUP;
+      TempKeyEvent.modifiers               := GetCefKeyboardModifiers(aMessage.wParam, aMessage.lParam);
+      TempKeyEvent.windows_key_code        := integer(aMessage.wParam);
+      TempKeyEvent.native_key_code         := integer(aMessage.lParam);
+      TempKeyEvent.is_system_key           := ord(True);
+      TempKeyEvent.character               := #0;
+      TempKeyEvent.unmodified_character    := #0;
+      TempKeyEvent.focus_on_editable_field := ord(False);
+
+      chrmosr.SendKeyEvent(@TempKeyEvent);
+    end;
+end;
+
+procedure TFMXExternalPumpBrowserFrm.HandleKEYDOWN(const aMessage : TMsg);
+var
+  TempKeyEvent : TCefKeyEvent;
+begin
+  if Panel1.IsFocused then
+    begin
+      TempKeyEvent.kind                    := KEYEVENT_RAWKEYDOWN;
+      TempKeyEvent.modifiers               := GetCefKeyboardModifiers(aMessage.wParam, aMessage.lParam);
+      TempKeyEvent.windows_key_code        := integer(aMessage.wParam);
+      TempKeyEvent.native_key_code         := integer(aMessage.lParam);
+      TempKeyEvent.is_system_key           := ord(False);
+      TempKeyEvent.character               := #0;
+      TempKeyEvent.unmodified_character    := #0;
+      TempKeyEvent.focus_on_editable_field := ord(False);
+
+      chrmosr.SendKeyEvent(@TempKeyEvent);
+    end;
+end;
+
+procedure TFMXExternalPumpBrowserFrm.HandleKEYUP(const aMessage : TMsg);
+var
+  TempKeyEvent : TCefKeyEvent;
+begin
+  if Panel1.IsFocused then
+    begin
+      if (aMessage.wParam = vkReturn) then
+        begin
+          TempKeyEvent.kind                    := KEYEVENT_CHAR;
+          TempKeyEvent.modifiers               := GetCefKeyboardModifiers(aMessage.wParam, aMessage.lParam);
+          TempKeyEvent.windows_key_code        := integer(aMessage.wParam);
+          TempKeyEvent.native_key_code         := integer(aMessage.lParam);
+          TempKeyEvent.is_system_key           := ord(False);
+          TempKeyEvent.character               := #0;
+          TempKeyEvent.unmodified_character    := #0;
+          TempKeyEvent.focus_on_editable_field := ord(False);
+
+          chrmosr.SendKeyEvent(@TempKeyEvent);
+        end;
+
+      TempKeyEvent.kind                    := KEYEVENT_KEYUP;
+      TempKeyEvent.modifiers               := GetCefKeyboardModifiers(aMessage.wParam, aMessage.lParam);
+      TempKeyEvent.windows_key_code        := integer(aMessage.wParam);
+      TempKeyEvent.native_key_code         := integer(aMessage.lParam);
+      TempKeyEvent.is_system_key           := ord(False);
+      TempKeyEvent.character               := #0;
+      TempKeyEvent.unmodified_character    := #0;
+      TempKeyEvent.focus_on_editable_field := ord(False);
+
+      chrmosr.SendKeyEvent(@TempKeyEvent);
+    end;
+end;
+
+function TFMXExternalPumpBrowserFrm.HandlePOINTER(const aMessage : TMsg) : boolean;
+begin
+  Result := Panel1.IsFocused and
+            (GlobalCEFApp <> nil) and
+            ArePointerEventsSupported and
+            HandlePointerEvent(aMessage);
+end;
+
+function TFMXExternalPumpBrowserFrm.SendCompMessage(aMsg : cardinal; aWParam : WPARAM; aLParam : LPARAM) : boolean;
+var
+  TempHandle : TWinWindowHandle;
+begin
+  TempHandle := WindowHandleToPlatform(Handle);
+  Result     := WinApi.Windows.PostMessage(TempHandle.Wnd, aMsg, aWParam, aLParam);
+end;
+
+function TFMXExternalPumpBrowserFrm.ArePointerEventsSupported : boolean;
+begin
+  Result := FAtLeastWin8 and
+            (@GetPointerType      <> nil) and
+            (@GetPointerTouchInfo <> nil) and
+            (@GetPointerPenInfo   <> nil);
+end;
+
+function TFMXExternalPumpBrowserFrm.HandlePointerEvent(const aMessage : TMsg) : boolean;
+const
+  PT_TOUCH = 2;
+  PT_PEN   = 3;
+var
+  TempID   : uint32;
+  TempType : POINTER_INPUT_TYPE;
+begin
+  Result := False;
+  TempID := LoWord(aMessage.wParam);
+
+  if GetPointerType(TempID, @TempType) then
+    case TempType of
+      PT_PEN   : Result := HandlePenEvent(TempID, aMessage.message);
+      PT_TOUCH : Result := HandleTouchEvent(TempID, aMessage.message);
+    end;
+end;
+
+function TFMXExternalPumpBrowserFrm.HandlePenEvent(const aID : uint32; aMsg : cardinal) : boolean;
+var
+  TempPenInfo    : POINTER_PEN_INFO;
+  TempTouchEvent : TCefTouchEvent;
+  TempPoint      : TPoint;
+begin
+  Result := False;
+  if not(GetPointerPenInfo(aID, @TempPenInfo)) then exit;
+
+  TempTouchEvent.id        := aID;
+  TempTouchEvent.x         := 0;
+  TempTouchEvent.y         := 0;
+  TempTouchEvent.radius_x  := 0;
+  TempTouchEvent.radius_y  := 0;
+  TempTouchEvent.type_     := CEF_TET_RELEASED;
+  TempTouchEvent.modifiers := EVENTFLAG_NONE;
+
+  if ((TempPenInfo.penFlags and PEN_FLAG_ERASER) <> 0) then
+    TempTouchEvent.pointer_type := CEF_POINTER_TYPE_ERASER
+   else
+    TempTouchEvent.pointer_type := CEF_POINTER_TYPE_PEN;
+
+  if ((TempPenInfo.penMask and PEN_MASK_PRESSURE) <> 0) then
+    TempTouchEvent.pressure := TempPenInfo.pressure / 1024
+   else
+    TempTouchEvent.pressure := 0;
+
+  if ((TempPenInfo.penMask and PEN_MASK_ROTATION) <> 0) then
+    TempTouchEvent.rotation_angle := TempPenInfo.rotation / 180 * Pi
+   else
+    TempTouchEvent.rotation_angle := 0;
+
+  Result := True;
+
+  case aMsg of
+    WM_POINTERDOWN :
+      TempTouchEvent.type_ := CEF_TET_PRESSED;
+
+    WM_POINTERUPDATE :
+      if ((TempPenInfo.pointerInfo.pointerFlags and POINTER_FLAG_INCONTACT) <> 0) then
+        TempTouchEvent.type_ := CEF_TET_MOVED
+       else
+        exit; // Ignore hover events.
+
+    WM_POINTERUP :
+      TempTouchEvent.type_ := CEF_TET_RELEASED;
+  end;
+
+  if ((TempPenInfo.pointerInfo.pointerFlags and POINTER_FLAG_CANCELED) <> 0) then
+    TempTouchEvent.type_ := CEF_TET_CANCELLED;
+
+  TempPoint        := Panel1.ScreenToClient(TempPenInfo.pointerInfo.ptPixelLocation);
+  // TFMXBufferPanel.ScreenToClient applies the scale factor. No need to call DeviceToLogical to set TempTouchEvent.
+  TempTouchEvent.x := TempPoint.x;
+  TempTouchEvent.y := TempPoint.y;
+
+  chrmosr.SendTouchEvent(@TempTouchEvent);
+end;
+
+function TFMXExternalPumpBrowserFrm.HandleTouchEvent(const aID : uint32; aMsg : cardinal) : boolean;
+var
+  TempTouchInfo  : POINTER_TOUCH_INFO;
+  TempTouchEvent : TCefTouchEvent;
+  TempPoint      : TPoint;
+begin
+  Result := False;
+  if not(GetPointerTouchInfo(aID, @TempTouchInfo)) then exit;
+
+  TempTouchEvent.id             := aID;
+  TempTouchEvent.x              := 0;
+  TempTouchEvent.y              := 0;
+  TempTouchEvent.radius_x       := 0;
+  TempTouchEvent.radius_y       := 0;
+  TempTouchEvent.rotation_angle := 0;
+  TempTouchEvent.pressure       := 0;
+  TempTouchEvent.type_          := CEF_TET_RELEASED;
+  TempTouchEvent.modifiers      := EVENTFLAG_NONE;
+  TempTouchEvent.pointer_type   := CEF_POINTER_TYPE_TOUCH;
+
+  Result := True;
+
+  case aMsg of
+    WM_POINTERDOWN :
+      TempTouchEvent.type_ := CEF_TET_PRESSED;
+
+    WM_POINTERUPDATE :
+      if ((TempTouchInfo.pointerInfo.pointerFlags and POINTER_FLAG_INCONTACT) <> 0) then
+        TempTouchEvent.type_ := CEF_TET_MOVED
+       else
+        exit; // Ignore hover events.
+
+    WM_POINTERUP :
+      TempTouchEvent.type_ := CEF_TET_RELEASED;
+  end;
+
+  if ((TempTouchInfo.pointerInfo.pointerFlags and POINTER_FLAG_CANCELED) <> 0) then
+    TempTouchEvent.type_ := CEF_TET_CANCELLED;
+
+  TempPoint        := Panel1.ScreenToClient(TempTouchInfo.pointerInfo.ptPixelLocation);
+  // TFMXBufferPanel.ScreenToClient applies the scale factor. No need to call DeviceToLogical to set TempTouchEvent.
+  TempTouchEvent.x := TempPoint.x;
+  TempTouchEvent.y := TempPoint.y;
+
+  chrmosr.SendTouchEvent(@TempTouchEvent);
+end;
+{$ENDIF}
 
 end.

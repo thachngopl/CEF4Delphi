@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -51,11 +51,13 @@ uses
   Controls, Forms, Dialogs, StdCtrls, ExtCtrls, Types, ComCtrls, ClipBrd,
   {$ENDIF}
   uCEFChromium, uCEFWindowParent, uCEFInterfaces, uCEFApplication, uCEFSchemeRegistrar,
-  uCEFTypes, uCEFConstants, uCEFWinControl, uCEFSentinel;
+  uCEFTypes, uCEFConstants, uCEFWinControl, uCEFSentinel, uCEFChromiumCore;
 
 const
   MINIBROWSER_CONTEXTMENU_REGSCHEME    = MENU_ID_USER_FIRST + 1;
   MINIBROWSER_CONTEXTMENU_CLEARFACT    = MENU_ID_USER_FIRST + 2;
+
+  CUSTOM_SCHEME_NAME = 'hello';
 
 type
   TSchemeRegistrationBrowserFrm = class(TForm)
@@ -65,7 +67,6 @@ type
     Chromium1: TChromium;
     AddressCbx: TComboBox;
     Timer1: TTimer;
-    CEFSentinel1: TCEFSentinel;
     procedure Chromium1AfterCreated(Sender: TObject;
       const browser: ICefBrowser);
     procedure Chromium1BeforeContextMenu(Sender: TObject;
@@ -92,7 +93,6 @@ type
       var aAction : TCefCloseBrowserAction);
     procedure Chromium1BeforeClose(Sender: TObject;
       const browser: ICefBrowser);
-    procedure CEFSentinel1Close(Sender: TObject);
   private
     { Private declarations }
   protected
@@ -137,12 +137,11 @@ uses
 // =================
 // 1. FormCloseQuery sets CanClose to FALSE calls TChromium.CloseBrowser which triggers the TChromium.OnClose event.
 // 2. TChromium.OnClose sends a CEFBROWSER_DESTROY message to destroy CEFWindowParent1 in the main thread, which triggers the TChromium.OnBeforeClose event.
-// 3. TChromium.OnBeforeClose calls TCEFSentinel.Start, which will trigger TCEFSentinel.OnClose when the renderer processes are closed.
-// 4. TCEFSentinel.OnClose sets FCanClose := True and sends WM_CLOSE to the form.
+// 3. TChromium.OnBeforeClose sets FCanClose := True and sends WM_CLOSE to the form.
 
 procedure GlobalCEFApp_OnRegCustomSchemes(const registrar: TCefSchemeRegistrarRef);
 begin
-  registrar.AddCustomScheme('hello', CEF_SCHEME_OPTION_STANDARD or CEF_SCHEME_OPTION_LOCAL);
+  registrar.AddCustomScheme(CUSTOM_SCHEME_NAME, CEF_SCHEME_OPTION_STANDARD or CEF_SCHEME_OPTION_LOCAL);
 end;
 
 procedure CreateGlobalCEFApp;
@@ -154,12 +153,6 @@ begin
   // GlobalCEFApp.LogSeverity          := LOGSEVERITY_VERBOSE;
 end;
 
-procedure TSchemeRegistrationBrowserFrm.CEFSentinel1Close(Sender: TObject);
-begin
-  FCanClose := True;
-  PostMessage(Handle, WM_CLOSE, 0, 0);
-end;
-
 procedure TSchemeRegistrationBrowserFrm.Chromium1AfterCreated(Sender: TObject; const browser: ICefBrowser);
 begin
   PostMessage(Handle, CEF_AFTERCREATED, 0, 0);
@@ -168,7 +161,8 @@ end;
 procedure TSchemeRegistrationBrowserFrm.Chromium1BeforeClose(
   Sender: TObject; const browser: ICefBrowser);
 begin
-  CEFSentinel1.Start;
+  FCanClose := True;
+  PostMessage(Handle, WM_CLOSE, 0, 0);
 end;
 
 procedure TSchemeRegistrationBrowserFrm.Chromium1BeforeContextMenu(
@@ -216,7 +210,7 @@ begin
         begin
           // You can register the Scheme Handler Factory in the DPR file or later, for example in a context menu command.
           TempFactory := TCefSchemeHandlerFactoryOwn.Create(THelloScheme);
-          if not(browser.host.RequestContext.RegisterSchemeHandlerFactory('hello', '', TempFactory)) then
+          if not(browser.host.RequestContext.RegisterSchemeHandlerFactory(CUSTOM_SCHEME_NAME, '', TempFactory)) then
             MessageDlg('RegisterSchemeHandlerFactory error !', mtError, [mbOk], 0);
         end;
 
@@ -246,7 +240,7 @@ end;
 procedure TSchemeRegistrationBrowserFrm.FormCreate(Sender: TObject);
 begin
   // You can register the Scheme Handler Factory here or later, for example in a context menu command.
-  CefRegisterSchemeHandlerFactory('hello', '', THelloScheme);
+  CefRegisterSchemeHandlerFactory(CUSTOM_SCHEME_NAME, '', THelloScheme);
 end;
 
 procedure TSchemeRegistrationBrowserFrm.FormShow(Sender: TObject);

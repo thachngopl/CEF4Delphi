@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -44,10 +44,10 @@ interface
 uses
   {$IFDEF DELPHI16_UP}
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls, System.StrUtils,
   {$ELSE}
   Windows, Messages, SysUtils, Variants, Classes, Graphics,
-  Controls, Forms, Dialogs, StdCtrls, ExtCtrls,
+  Controls, Forms, Dialogs, StdCtrls, ExtCtrls, StrUtils,
   {$ENDIF}
   uCEFChromium, uCEFWindowParent, uCEFInterfaces, uCEFApplication, uCEFTypes, uCEFConstants,
   uCEFCookieManager, uCEFCookieVisitor, uCEFWinControl, uCEFSentinel, uCEFChromiumEvents;
@@ -61,6 +61,8 @@ const
   MINIBROWSER_CONTEXTMENU_GETCOOKIES        = MENU_ID_USER_FIRST + 2;
   MINIBROWSER_CONTEXTMENU_SETCOOKIE         = MENU_ID_USER_FIRST + 3;
   MINIBROWSER_CONTEXTMENU_GETGOOGLECOOKIES  = MENU_ID_USER_FIRST + 4;
+                        
+  BLOCKED_COOKIE_DOMAIN = 'briskbard.com';
 
 type
 
@@ -68,19 +70,22 @@ type
 
   TCookieVisitorFrm = class(TForm)
     AddressBarPnl: TPanel;
-    CEFSentinel1: TCEFSentinel;
     Edit1: TEdit;
     GoBtn: TButton;
     CEFWindowParent1: TCEFWindowParent;
     Chromium1: TChromium;
     Timer1: TTimer;
-    procedure CEFSentinel1Close(Sender: TObject);
     procedure Chromium1AfterCreated(Sender: TObject; const browser: ICefBrowser);
+    procedure Chromium1CanSaveCookie(Sender: TObject;
+      const browser: ICefBrowser; const frame: ICefFrame;
+      const request: ICefRequest; const response: ICefResponse;
+      const cookie: PCefCookie; var aResult: boolean);
     procedure Chromium1CookieSet(Sender: TObject; aSuccess: boolean;
       aID: integer);
     procedure Chromium1CookiesVisited(Sender: TObject; const name_, value,
       domain, path: ustring; secure, httponly, hasExpires: Boolean;
       const creation, lastAccess, expires: TDateTime; count, total, aID: Integer;
+      same_site: TCefCookieSameSite; priority: Integer;
       var aDeleteCookie, aResult: Boolean);
     procedure Chromium1CookieVisitorDestroyed(Sender: TObject; aID: integer);
     procedure FormShow(Sender: TObject);
@@ -160,8 +165,7 @@ uses
 // =================
 // 1. FormCloseQuery sets CanClose to FALSE calls TChromium.CloseBrowser which triggers the TChromium.OnClose event.
 // 2. TChromium.OnClose sends a CEFBROWSER_DESTROY message to destroy CEFWindowParent1 in the main thread, which triggers the TChromium.OnBeforeClose event.
-// 3. TChromium.OnBeforeClose calls TCEFSentinel.Start, which will trigger TCEFSentinel.OnClose when the renderer processes are closed.
-// 4. TCEFSentinel.OnClose sets FCanClose := True and sends WM_CLOSE to the form.
+// 3. TChromium.OnBeforeClose sets FCanClose := True and sends WM_CLOSE to the form.
 
 procedure CreateGlobalCEFApp;
 begin
@@ -173,7 +177,7 @@ end;
 procedure TCookieVisitorFrm.AddCookieInfo(const aCookie : TCookie);
 begin
   // This should be protected by a mutex.
-  FText := FText + aCookie.name + ' : ' + aCookie.value + #13 + #10;
+  FText := FText + aCookie.name + ' : ' + aCookie.value + ' (' + aCookie.domain + ')' + #13 + #10;
 end;
 
 procedure TCookieVisitorFrm.BrowserCreatedMsg(var aMessage : TMessage);
@@ -224,16 +228,40 @@ begin
   PostMessage(Handle, CEF_AFTERCREATED, 0, 0);
 end;
 
+procedure TCookieVisitorFrm.Chromium1CanSaveCookie(Sender: TObject;
+  const browser: ICefBrowser; const frame: ICefFrame;
+  const request: ICefRequest; const response: ICefResponse;
+  const cookie: PCefCookie; var aResult: boolean);
+var
+  TempDomain : string;
+begin
+  aResult := True;
+
+  // This event can't block cookies set in JavaScript
+
+  if (cookie               <> nil) and
+     (cookie.domain.str    <> nil) and
+     (cookie.domain.length  > 0)   then
+    begin
+      SetString(TempDomain, cookie.domain.str, cookie.domain.length);
+
+      // TO-DO: See the "Domain Matching" section in the RFC for "HTTP State Management Mechanism".
+      if AnsiEndsStr(BLOCKED_COOKIE_DOMAIN, TempDomain) then
+        aResult := False;
+    end;
+end;
+
 procedure TCookieVisitorFrm.Chromium1CookieSet(Sender: TObject;
   aSuccess: boolean; aID: integer);
 begin
-  PostMessage(Handle, MINIBROWSER_COOKIESET, ord(aSuccess), aID);
+  PostMessage(Handle, MINIBROWSER_COOKIESET, WPARAM(aSuccess), aID);
 end;
 
 procedure TCookieVisitorFrm.Chromium1CookiesVisited(Sender: TObject;
   const name_, value, domain, path: ustring; secure, httponly,
   hasExpires: Boolean; const creation, lastAccess, expires: TDateTime; count,
-  total, aID: Integer; var aDeleteCookie, aResult: Boolean);
+  total, aID: Integer; same_site: TCefCookieSameSite; priority: Integer;
+  var aDeleteCookie, aResult: Boolean);
 var
   TempCookie : TCookie;
 begin
@@ -248,7 +276,9 @@ begin
   TempCookie.creation    := creation;
   TempCookie.last_access := lastAccess;
   TempCookie.has_expires := hasExpires;
-  TempCookie.expires     := expires;
+  TempCookie.expires     := expires;   
+  TempCookie.same_site   := same_site;
+  TempCookie.priority    := priority;
 
   AddCookieInfo(TempCookie);
 
@@ -261,15 +291,10 @@ begin
   PostMessage(Handle, MINIBROWSER_SHOWCOOKIES, 0, 0);
 end;
 
-procedure TCookieVisitorFrm.CEFSentinel1Close(Sender: TObject);
+procedure TCookieVisitorFrm.Chromium1BeforeClose(Sender: TObject; const browser: ICefBrowser);
 begin
   FCanClose := True;
   PostMessage(Handle, WM_CLOSE, 0, 0);
-end;
-
-procedure TCookieVisitorFrm.Chromium1BeforeClose(Sender: TObject; const browser: ICefBrowser);
-begin
-  CEFSentinel1.Start;
 end;
 
 procedure TCookieVisitorFrm.Chromium1BeforeContextMenu(Sender: TObject;
@@ -341,6 +366,8 @@ begin
                           now,
                           now,
                           now,
+                          CEF_COOKIE_SAME_SITE_UNSPECIFIED,
+                          CEF_COOKIE_PRIORITY_MEDIUM,
                           False);
   end;
 end;

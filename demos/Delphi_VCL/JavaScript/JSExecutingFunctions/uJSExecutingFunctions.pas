@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -50,7 +50,8 @@ uses
   Controls, Forms, Dialogs, StdCtrls, ExtCtrls, ComCtrls,
   {$ENDIF}
   uCEFChromium, uCEFWindowParent, uCEFInterfaces, uCEFApplication, uCEFTypes,
-  uCEFConstants, uCEFv8Value, uCEFWinControl, uCEFSentinel;
+  uCEFConstants, uCEFv8Value, uCEFWinControl, uCEFSentinel,
+  uCEFChromiumCore;
 
 const
   JSDEMO_CONTEXTMENU_EXECFUNCTION = MENU_ID_USER_FIRST + 1;
@@ -65,7 +66,6 @@ type
     CEFWindowParent1: TCEFWindowParent;
     Chromium1: TChromium;
     Timer1: TTimer;
-    CEFSentinel1: TCEFSentinel;
     procedure FormShow(Sender: TObject);
     procedure GoBtnClick(Sender: TObject);
     procedure Chromium1AfterCreated(Sender: TObject; const browser: ICefBrowser);
@@ -92,7 +92,6 @@ type
       var aAction : TCefCloseBrowserAction);
     procedure Chromium1BeforeClose(Sender: TObject;
       const browser: ICefBrowser);
-    procedure CEFSentinel1Close(Sender: TObject);
   protected
     // Variables to control when can we destroy the form safely
     FCanClose : boolean;  // Set to True in TChromium.OnBeforeClose
@@ -136,8 +135,7 @@ implementation
 // =================
 // 1. FormCloseQuery sets CanClose to FALSE calls TChromium.CloseBrowser which triggers the TChromium.OnClose event.
 // 2. TChromium.OnClose sends a CEFBROWSER_DESTROY message to destroy CEFWindowParent1 in the main thread, which triggers the TChromium.OnBeforeClose event.
-// 3. TChromium.OnBeforeClose calls TCEFSentinel.Start, which will trigger TCEFSentinel.OnClose when the renderer processes are closed.
-// 4. TCEFSentinel.OnClose sets FCanClose := True and sends WM_CLOSE to the form.
+// 3. TChromium.OnBeforeClose sets FCanClose := True and sends WM_CLOSE to the form.
 
 uses
   uCEFProcessMessage, uMyV8Handler;
@@ -184,12 +182,6 @@ begin
   Chromium1.LoadURL(Edit1.Text);
 end;
 
-procedure TJSExecutingFunctionsFrm.CEFSentinel1Close(Sender: TObject);
-begin
-  FCanClose := True;
-  PostMessage(Handle, WM_CLOSE, 0, 0);
-end;
-
 procedure TJSExecutingFunctionsFrm.Chromium1AfterCreated(Sender: TObject; const browser: ICefBrowser);
 begin
   PostMessage(Handle, CEF_AFTERCREATED, 0, 0);
@@ -198,7 +190,8 @@ end;
 procedure TJSExecutingFunctionsFrm.Chromium1BeforeClose(Sender: TObject;
   const browser: ICefBrowser);
 begin
-  CEFSentinel1.Start;
+  FCanClose := True;
+  PostMessage(Handle, WM_CLOSE, 0, 0);
 end;
 
 procedure TJSExecutingFunctionsFrm.Chromium1BeforeContextMenu(

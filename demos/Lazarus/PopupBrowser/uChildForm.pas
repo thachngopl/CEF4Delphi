@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -186,10 +186,10 @@ begin
 end;
 
 procedure TChildForm.chrmosrIMECompositionRangeChanged(      Sender                : TObject;
-                                                   const browser               : ICefBrowser;
-                                                   const selected_range        : PCefRange;
-                                                         character_boundsCount : NativeUInt;
-                                                   const character_bounds      : PCefRect);
+                                                       const browser               : ICefBrowser;
+                                                       const selected_range        : PCefRange;
+                                                             character_boundsCount : NativeUInt;
+                                                       const character_bounds      : PCefRect);
 var
   TempPRect : PCefRect;
   i         : NativeUInt;
@@ -284,19 +284,19 @@ begin
   Result := (targetDisposition in [WOD_NEW_FOREGROUND_TAB, WOD_NEW_BACKGROUND_TAB, WOD_NEW_POPUP, WOD_NEW_WINDOW]);
 end;
 
-procedure TChildForm.chrmosrCursorChange(Sender : TObject;
-                                     const browser          : ICefBrowser;
-                                           aCursor          : HICON;
-                                           cursorType       : TCefCursorType;
-                                     const customCursorInfo : PCefCursorInfo);
+procedure TChildForm.chrmosrCursorChange(      Sender           : TObject;
+                                         const browser          : ICefBrowser;
+                                               aCursor          : HICON;
+                                               cursorType       : TCefCursorType;
+                                         const customCursorInfo : PCefCursorInfo);
 begin
   Panel1.Cursor := CefCursorToWindowsCursor(cursorType);
 end;
 
-procedure TChildForm.chrmosrGetScreenInfo(Sender : TObject;
-                                      const browser    : ICefBrowser;
-                                      var   screenInfo : TCefScreenInfo;
-                                      out   Result     : Boolean);
+procedure TChildForm.chrmosrGetScreenInfo(      Sender     : TObject;
+                                          const browser    : ICefBrowser;
+                                          var   screenInfo : TCefScreenInfo;
+                                          out   Result     : Boolean);
 var
   TempRect : TCEFRect;
 begin
@@ -339,9 +339,9 @@ begin
     Result := False;
 end;
 
-procedure TChildForm.chrmosrGetViewRect(Sender : TObject;
-                                    const browser : ICefBrowser;
-                                    var   rect    : TCefRect);
+procedure TChildForm.chrmosrGetViewRect(      Sender  : TObject;
+                                        const browser : ICefBrowser;
+                                        var   rect    : TCefRect);
 begin
   if (GlobalCEFApp <> nil) then
     begin
@@ -403,48 +403,45 @@ begin
             TempHeight := Panel1.BufferHeight;
           end;
 
-        if (TempBufferBits <> nil) then
+        SrcStride := aWidth * SizeOf(TRGBQuad);
+        n         := 0;
+
+        while (n < dirtyRectsCount) do
           begin
-            SrcStride := aWidth * SizeOf(TRGBQuad);
-            n         := 0;
-
-            while (n < dirtyRectsCount) do
+            if (dirtyRects^[n].x >= 0) and (dirtyRects^[n].y >= 0) then
               begin
-                if (dirtyRects^[n].x >= 0) and (dirtyRects^[n].y >= 0) then
+                TempLineSize := min(dirtyRects^[n].width, TempWidth - dirtyRects^[n].x) * SizeOf(TRGBQuad);
+
+                if (TempLineSize > 0) then
                   begin
-                    TempLineSize := min(dirtyRects^[n].width, TempWidth - dirtyRects^[n].x) * SizeOf(TRGBQuad);
+                    TempSrcOffset := ((dirtyRects^[n].y * aWidth) + dirtyRects^[n].x) * SizeOf(TRGBQuad);
+                    TempDstOffset := (dirtyRects^[n].x * SizeOf(TRGBQuad));
 
-                    if (TempLineSize > 0) then
+                    src := @PByte(buffer)[TempSrcOffset];
+
+                    i := 0;
+                    j := min(dirtyRects^[n].height, TempHeight - dirtyRects^[n].y);
+
+                    while (i < j) do
                       begin
-                        TempSrcOffset := ((dirtyRects^[n].y * aWidth) + dirtyRects^[n].x) * SizeOf(TRGBQuad);
-                        TempDstOffset := (dirtyRects^[n].x * SizeOf(TRGBQuad));
+                        TempBufferBits := TempBitmap.Scanline[dirtyRects^[n].y + i];
+                        dst            := @PByte(TempBufferBits)[TempDstOffset];
 
-                        src := @PByte(buffer)[TempSrcOffset];
+                        Move(src^, dst^, TempLineSize);
 
-                        i := 0;
-                        j := min(dirtyRects^[n].height, TempHeight - dirtyRects^[n].y);
-
-                        while (i < j) do
-                          begin
-                            TempBufferBits := TempBitmap.Scanline[dirtyRects^[n].y + i];
-                            dst            := @PByte(TempBufferBits)[TempDstOffset];
-
-                            Move(src^, dst^, TempLineSize);
-
-                            Inc(src, SrcStride);
-                            inc(i);
-                          end;
+                        Inc(src, SrcStride);
+                        inc(i);
                       end;
                   end;
-
-                inc(n);
               end;
 
-            TempBitmap.EndUpdate;
-
-            if FShowPopup and (FPopUpBitmap <> nil) then
-              Panel1.BufferDraw(FPopUpRect.Left, FPopUpRect.Top, FPopUpBitmap);
+            inc(n);
           end;
+
+        TempBitmap.EndUpdate;
+
+        if FShowPopup and (FPopUpBitmap <> nil) then
+          Panel1.BufferDraw(FPopUpRect.Left, FPopUpRect.Top, FPopUpBitmap);
 
         Panel1.EndBufferDraw;
 
@@ -582,6 +579,7 @@ begin
       TempKeyEvent.unmodified_character    := #0;
       TempKeyEvent.focus_on_editable_field := ord(False);
 
+      CefCheckAltGrPressed(aMessage.wParam, TempKeyEvent);
       chrmosr.SendKeyEvent(@TempKeyEvent);
     end;
 end;
@@ -838,7 +836,7 @@ end;
 
 procedure TChildForm.InitializeLastClick;
 begin
-  FLastClickCount   := 0;
+  FLastClickCount   := 1;
   FLastClickTime    := 0;
   FLastClickPoint.x := 0;
   FLastClickPoint.y := 0;
@@ -870,18 +868,18 @@ begin
 end;
 
 procedure TChildForm.Panel1IMECommitText(      Sender              : TObject;
-                                     const aText               : ustring;
-                                     const replacement_range   : PCefRange;
-                                           relative_cursor_pos : Integer);
+                                         const aText               : ustring;
+                                         const replacement_range   : PCefRange;
+                                               relative_cursor_pos : Integer);
 begin
   chrmosr.IMECommitText(aText, replacement_range, relative_cursor_pos);
 end;
 
 procedure TChildForm.Panel1IMESetComposition(      Sender            : TObject;
-                                         const aText             : ustring;
-                                         const underlines        : TCefCompositionUnderlineDynArray;
-                                         const replacement_range : TCefRange;
-                                         const selection_range   : TCefRange);
+                                             const aText             : ustring;
+                                             const underlines        : TCefCompositionUnderlineDynArray;
+                                             const replacement_range : TCefRange;
+                                             const selection_range   : TCefRange);
 begin
   chrmosr.IMESetComposition(aText, underlines, @replacement_range, @selection_range);
 end;

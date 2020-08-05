@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -65,6 +65,7 @@ type
   {$IFNDEF FPC}{$IFDEF DELPHI16_UP}[ComponentPlatformsAttribute(pidWin32 or pidWin64)]{$ENDIF}{$ENDIF}
   TChromium = class(TChromiumCore)
     protected
+      function  GetParentFormHandle : TCefWindowHandle; override;
       function  GetParentForm : TCustomForm;
       procedure InitializeDevToolsWindowInfo(aDevTools : TWinControl); virtual;
     public
@@ -83,6 +84,7 @@ type
       procedure SetFormTopTo(const y : Integer);
 
       function  CreateBrowser(const aBrowserParent : TWinControl = nil; const aWindowName : ustring = ''; const aContext : ICefRequestContext = nil; const aExtraInfo : ICefDictionaryValue = nil) : boolean; overload; virtual;
+      function  SaveAsBitmapStream(var aStream : TStream) : boolean;
       function  TakeSnapshot(var aBitmap : TBitmap) : boolean;
   end;
 
@@ -179,6 +181,27 @@ begin
       end
      else
       TempComp := TempComp.owner;
+end;
+
+function TChromium.GetParentFormHandle : TCefWindowHandle;
+{$IFDEF MSWINDOWS}
+var
+  TempForm : TCustomForm;
+{$ENDIF}
+begin
+  Result := inherited GetParentFormHandle;
+
+  {$IFDEF MSWINDOWS}
+  TempForm := GetParentForm;
+
+  if (TempForm <> nil) and TempForm.HandleAllocated then
+    Result := TempForm.Handle
+   else
+    if (Application          <> nil) and
+       (Application.MainForm <> nil) and
+       Application.MainForm.HandleAllocated then
+      Result := Application.MainForm.Handle;
+  {$ENDIF}
 end;
 
 procedure TChromium.MoveFormTo(const x, y: Integer);
@@ -289,10 +312,34 @@ begin
   Result := inherited CreateBrowser(TempHandle, TempRect, aWindowName, aContext, aExtraInfo);
 end;
 
+function TChromium.SaveAsBitmapStream(var aStream : TStream) : boolean;
+{$IFDEF MSWINDOWS}
+var
+  TempDC   : HDC;
+  TempRect : TRect;
+{$ENDIF}
+begin
+  Result := False;
+
+  {$IFDEF MSWINDOWS}
+  if not(FIsOSR) and (FRenderCompHWND <> 0) and (aStream <> nil) then
+    begin
+      TempDC := GetDC(FRenderCompHWND);
+
+      if (TempDC <> 0) then
+        try
+          GetClientRect(FRenderCompHWND, TempRect);
+          Result := CopyDCToBitmapStream(TempDC, TempRect, aStream);
+        finally
+          ReleaseDC(FRenderCompHWND, TempDC);
+        end;
+    end;
+  {$ENDIF}
+end;
+
 function TChromium.TakeSnapshot(var aBitmap : TBitmap) : boolean;
 {$IFDEF MSWINDOWS}
 var
-  TempHWND   : HWND;
   TempDC     : HDC;
   TempRect   : TRect;
   TempWidth  : Integer;
@@ -302,30 +349,29 @@ begin
   Result := False;
 
   {$IFDEF MSWINDOWS}
-  if not(FIsOSR) then
+  if not(FIsOSR) and (FRenderCompHWND <> 0) then
     begin
-      TempHWND := GetWindowHandle;
+      GetClientRect(FRenderCompHWND, TempRect);
 
-      if (TempHWND <> 0) then
-        begin
-          GetClientRect(TempHWND, TempRect);
+      TempWidth  := TempRect.Right  - TempRect.Left;
+      TempHeight := TempRect.Bottom - TempRect.Top;
 
-          TempWidth  := TempRect.Right  - TempRect.Left;
-          TempHeight := TempRect.Bottom - TempRect.Top;
+      if (TempWidth <= 0) or (TempHeight <= 0) then exit;
 
-          if (aBitmap <> nil) then FreeAndNil(aBitmap);
+      if (aBitmap <> nil) then FreeAndNil(aBitmap);
 
-          aBitmap        := TBitmap.Create;
-          aBitmap.Height := TempHeight;
-          aBitmap.Width  := TempWidth;
+      aBitmap        := TBitmap.Create;
+      aBitmap.Height := TempHeight;
+      aBitmap.Width  := TempWidth;
 
-          TempDC := GetDC(TempHWND);
-          try
-            Result := BitBlt(aBitmap.Canvas.Handle, 0, 0, TempWidth, TempHeight,
-                             TempDC, 0, 0, SRCCOPY);
-          finally
-            ReleaseDC(TempHWND, TempDC);
-          end;
+      TempDC := GetDC(FRenderCompHWND);
+
+      if (TempDC <> 0) then
+        try
+          Result := BitBlt(aBitmap.Canvas.Handle, 0, 0, TempWidth, TempHeight,
+                           TempDC, 0, 0, SRCCOPY);
+        finally
+          ReleaseDC(FRenderCompHWND, TempDC);
         end;
     end;
   {$ENDIF}

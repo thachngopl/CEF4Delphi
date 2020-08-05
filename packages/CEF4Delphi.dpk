@@ -22,7 +22,7 @@ package CEF4Delphi;
 {$VARSTRINGCHECKS ON}
 {$WRITEABLECONST OFF}
 {$MINENUMSIZE 1}
-{$IMAGEBASE $54C00000}
+{$IMAGEBASE $400000}
 {$DEFINE DEBUG}
 {$ENDIF IMPLICITBUILDING}
 {$DESCRIPTION 'CEF4Delphi'}
@@ -174,7 +174,50 @@ contains
   uCEFResourceSkipCallback in '..\source\uCEFResourceSkipCallback.pas',
   uCEFResourceReadCallback in '..\source\uCEFResourceReadCallback.pas',
   uCEFSentinel in '..\source\uCEFSentinel.pas',
-  uCEFApplicationCore in '..\source\uCEFApplicationCore.pas';
+  uCEFApplicationCore in '..\source\uCEFApplicationCore.pas',
+  uCEFOAuth2Helper in '..\source\uCEFOAuth2Helper.pas',
+  uCEFMediaObserver in '..\source\uCEFMediaObserver.pas',
+  uCEFMediaRoute in '..\source\uCEFMediaRoute.pas',
+  uCEFMediaRouteCreateCallback in '..\source\uCEFMediaRouteCreateCallback.pas',
+  uCEFMediaRouter in '..\source\uCEFMediaRouter.pas',
+  uCEFMediaSink in '..\source\uCEFMediaSink.pas',
+  uCEFMediaSource in '..\source\uCEFMediaSource.pas',
+  uCEFRegistration in '..\source\uCEFRegistration.pas',
+  uCEFDisplay in '..\source\uCEFDisplay.pas',
+  uCEFLayout in '..\source\uCEFLayout.pas',
+  uCEFBoxLayout in '..\source\uCEFBoxLayout.pas',
+  uCEFFillLayout in '..\source\uCEFFillLayout.pas',
+  uCEFView in '..\source\uCEFView.pas',
+  uCEFViewDelegate in '..\source\uCEFViewDelegate.pas',
+  uCEFTextfield in '..\source\uCEFTextfield.pas',
+  uCEFTextfieldDelegate in '..\source\uCEFTextfieldDelegate.pas',
+  uCEFScrollView in '..\source\uCEFScrollView.pas',
+  uCEFPanel in '..\source\uCEFPanel.pas',
+  uCEFPanelDelegate in '..\source\uCEFPanelDelegate.pas',
+  uCEFBrowserView in '..\source\uCEFBrowserView.pas',
+  uCEFBrowserViewDelegate in '..\source\uCEFBrowserViewDelegate.pas',
+  uCEFButton in '..\source\uCEFButton.pas',
+  uCEFButtonDelegate in '..\source\uCEFButtonDelegate.pas',
+  uCEFLabelButton in '..\source\uCEFLabelButton.pas',
+  uCEFMenuButton in '..\source\uCEFMenuButton.pas',
+  uCEFMenuButtonPressedLock in '..\source\uCEFMenuButtonPressedLock.pas',
+  uCEFMenuButtonDelegate in '..\source\uCEFMenuButtonDelegate.pas',
+  uCEFWindow in '..\source\uCEFWindow.pas',
+  uCEFWindowDelegate in '..\source\uCEFWindowDelegate.pas',
+  uCEFViewsFrameworkEvents in '..\source\uCEFViewsFrameworkEvents.pas',
+  uCEFViewComponent in '..\source\uCEFViewComponent.pas',
+  uCEFTextfieldComponent in '..\source\uCEFTextfieldComponent.pas',
+  uCEFScrollViewComponent in '..\source\uCEFScrollViewComponent.pas',
+  uCEFPanelComponent in '..\source\uCEFPanelComponent.pas',
+  uCEFWindowComponent in '..\source\uCEFWindowComponent.pas',
+  uCEFBrowserViewComponent in '..\source\uCEFBrowserViewComponent.pas',
+  uCEFButtonComponent in '..\source\uCEFButtonComponent.pas',
+  uCEFLabelButtonComponent in '..\source\uCEFLabelButtonComponent.pas',
+  uCEFMenuButtonComponent in '..\source\uCEFMenuButtonComponent.pas',
+  uCEFAudioHandler in '..\source\uCEFAudioHandler.pas',
+  uCEFDevToolsMessageObserver in '..\source\uCEFDevToolsMessageObserver.pas',
+  uCEFMediaSinkDeviceInfoCallback in '..\source\uCEFMediaSinkDeviceInfoCallback.pas',
+  uCEFJson in '..\source\uCEFJson.pas';
 
 end.
 

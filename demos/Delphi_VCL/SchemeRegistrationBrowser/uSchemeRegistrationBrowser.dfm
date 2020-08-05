@@ -54,7 +54,8 @@ object SchemeRegistrationBrowserFrm: TSchemeRegistrationBrowserFrm
       Text = 'hello://test.html'
       Items.Strings = (
         'https://www.google.com'
-        'hello://test.html')
+        'hello://test.html'
+        'file://test.html')
     end
   end
   object CEFWindowParent1: TCEFWindowParent
@@ -81,10 +82,5 @@ object SchemeRegistrationBrowserFrm: TSchemeRegistrationBrowserFrm
     OnTimer = Timer1Timer
     Left = 16
     Top = 96
-  end
-  object CEFSentinel1: TCEFSentinel
-    OnClose = CEFSentinel1Close
-    Left = 16
-    Top = 152
   end
 end

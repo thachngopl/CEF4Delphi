@@ -1,15 +1,15 @@
 # CEF4Delphi [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Use%20CEF4Delphi%20to%20embed%20Chromium-based%20browsers%20in%20your%20application&url=https://github.com/salvadordf/CEF4Delphi&via=briskbard&hashtags=cef4delphi,delphi,lazarus,fpc)
-CEF4Delphi is an open source project created by Salvador Díaz Fau to embed Chromium-based browsers in applications made with Delphi or Lazarus/FPC.
+CEF4Delphi is an open source project created by Salvador DÃ­az Fau to embed Chromium-based browsers in applications made with [Delphi](https://www.embarcadero.com/products/delphi/starter) or [Lazarus/FPC](https://www.lazarus-ide.org/).
 
 CEF4Delphi is based on DCEF3, made by Henri Gourvest. The original license of DCEF3 still applies to CEF4Delphi. Read the license terms in the first lines of any *.pas file.
 
-CEF4Delphi uses CEF 78.3.1 which includes Chromium 78.0.3904.87. 
+CEF4Delphi uses CEF 84.3.10 which includes Chromium 84.0.4147.105. 
 The CEF binaries used by CEF4Delphi are available for download at spotify :
-* [32 bits](http://opensource.spotify.com/cefbuilds/cef_binary_78.3.1%2Bg8819d2e%2Bchromium-78.0.3904.87_windows32.tar.bz2)
-* [64 bits](http://opensource.spotify.com/cefbuilds/cef_binary_78.3.1%2Bg8819d2e%2Bchromium-78.0.3904.87_windows64.tar.bz2)
+* [32 bits](http://opensource.spotify.com/cefbuilds/cef_binary_84.3.10%2Bga46056b%2Bchromium-84.0.4147.105_windows32.tar.bz2)
+* [64 bits](http://opensource.spotify.com/cefbuilds/cef_binary_84.3.10%2Bga46056b%2Bchromium-84.0.4147.105_windows64.tar.bz2)
 
 
-CEF4Delphi was developed and tested on Delphi 10.3 Rio and it has been tested in Delphi 7, Delphi XE, Delphi 10, Delphi 10.2 and Lazarus 2.0.6/FPC 3.0.4. CEF4Delphi includes VCL, FireMonkey (FMX) and Lazarus components.
+CEF4Delphi was developed and tested on Delphi 10.4 and it has been tested in Delphi 7, Delphi XE, Delphi 10, Delphi 10.2, Delphi 10.3 and Lazarus 2.0.10/FPC 3.2.0. CEF4Delphi includes VCL, FireMonkey (FMX) and Lazarus components.
 
 ## Links
 * [Installation instructions and more information about CEF4Delphi](https://www.briskbard.com/index.php?lang=en&pageid=cef)
@@ -30,3 +30,15 @@ You can also support this project with Patreon.
 
 Additional:
 Delphinus-Support
+
+## Attribution
+Other projects :
+* [DCEF3](https://github.com/hgourvest/dcef3) 
+* [CEF](https://bitbucket.org/chromiumembedded/cef/)
+* [DCPcrypt](http://www.cityinthesky.co.uk/opensource/dcpcrypt/)
+* [Chromium](https://chromium.googlesource.com/chromium/src/)
+
+Some icons used in this project belong to these icon packages :
+* [Fugue & Diagona icons](http://yusukekamiyamane.com/)
+* [FatCow Farm-Fresh Web Icons](https://www.fatcow.com/free-icons)
+* [Material Design Icons](https://github.com/google/material-design-icons) 

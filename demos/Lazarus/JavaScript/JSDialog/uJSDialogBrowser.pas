@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -60,7 +60,6 @@ type
   { TJSDialogBrowserFrm }
 
   TJSDialogBrowserFrm = class(TForm)
-    CEFSentinel1: TCEFSentinel;
     ChromiumWindow1: TChromiumWindow;
     AddressPnl: TPanel;
     AddressEdt: TEdit;
@@ -259,13 +258,18 @@ end;
 
 procedure TJSDialogBrowserFrm.ChromiumWindow1BeforeClose(Sender: TObject);
 begin
-  CEFSentinel1.Start;
+  FCanClose := True;
+  PostMessage(Handle, WM_CLOSE, 0, 0);
 end;
 
 procedure TJSDialogBrowserFrm.ChromiumWindow1Close(Sender: TObject);
 begin
   // DestroyChildWindow will destroy the child window created by CEF at the top of the Z order.
-  if not(ChromiumWindow1.DestroyChildWindow) then CEFSentinel1.Start;
+  if not(ChromiumWindow1.DestroyChildWindow) then
+    begin
+      FCanClose := True;
+      PostMessage(Handle, WM_CLOSE, 0, 0);
+    end;
 end;
 
 procedure TJSDialogBrowserFrm.Chromium_OnBeforePopup(Sender: TObject;

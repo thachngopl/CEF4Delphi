@@ -74,6 +74,7 @@ object CookieVisitorFrm: TCookieVisitorFrm
     OnAfterCreated = Chromium1AfterCreated
     OnBeforeClose = Chromium1BeforeClose
     OnClose = Chromium1Close
+    OnCanSaveCookie = Chromium1CanSaveCookie
     Left = 32
     Top = 224
   end
@@ -83,10 +84,5 @@ object CookieVisitorFrm: TCookieVisitorFrm
     OnTimer = Timer1Timer
     Left = 32
     Top = 280
-  end
-  object CEFSentinel1: TCEFSentinel
-    OnClose = CEFSentinel1Close
-    Left = 32
-    Top = 336
   end
 end

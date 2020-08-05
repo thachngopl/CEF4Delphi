@@ -41,14 +41,15 @@ program EditorBrowser;
 
 uses
   {$IFDEF DELPHI16_UP}
-  Vcl.Forms,
   WinApi.Windows,
+  Vcl.Forms,
   {$ELSE}
   Forms,
   Windows,
   {$ENDIF }
   uCEFApplication,
-  uEditorBrowser in 'uEditorBrowser.pas' {Form1};
+  uEditorBrowser in 'uEditorBrowser.pas' {EditorBrowserFrm},
+  uImageSelection in 'uImageSelection.pas' {ImageSelectionFrm};
 
 {$R *.res}
 
@@ -65,7 +66,8 @@ begin
       {$IFDEF DELPHI11_UP}
       Application.MainFormOnTaskbar := True;
       {$ENDIF}
-      Application.CreateForm(TForm1, Form1);
+      Application.CreateForm(TEditorBrowserFrm, EditorBrowserFrm);
+      Application.CreateForm(TImageSelectionFrm, ImageSelectionFrm);
       Application.Run;
     end;
 

@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -83,6 +83,7 @@ type
       function  HasExtension(const extension_id: ustring): boolean;
       function  GetExtensions(const extension_ids: TStringList): boolean;
       function  GetExtension(const extension_id: ustring): ICefExtension;
+      function  GetMediaRouter: ICefMediaRouter;
 
     public
       class function UnWrap(data: Pointer): ICefRequestContext;
@@ -110,8 +111,9 @@ type
 implementation
 
 uses
-  uCEFMiscFunctions, uCEFLibFunctions, uCEFValue, uCEFDictionaryValue, uCEFCookieManager,
-  uCEFRequestContextHandler, uCEFExtension, uCEFStringList;
+  uCEFMiscFunctions, uCEFLibFunctions, uCEFValue, uCEFDictionaryValue,
+  uCEFCookieManager, uCEFRequestContextHandler, uCEFExtension, uCEFStringList,
+  uCEFMediaRouter;
 
 function TCefRequestContextRef.ClearSchemeHandlerFactories: Boolean;
 begin
@@ -134,8 +136,15 @@ begin
 end;
 
 function TCefRequestContextRef.GetHandler: ICefRequestContextHandler;
+var
+  TempHandler : PCefRequestContextHandler;
 begin
-  Result := TCefRequestContextHandlerRef.UnWrap(PCefRequestContext(FData)^.get_handler(PCefRequestContext(FData)));
+  TempHandler := PCefRequestContext(FData)^.get_handler(PCefRequestContext(FData));
+
+  if (TempHandler <> nil) then
+    Result := TCefRequestContextHandlerRef.UnWrap(TempHandler)
+   else
+    Result := nil;
 end;
 
 class function TCefRequestContextRef.Global: ICefRequestContext;
@@ -223,10 +232,11 @@ function TCefRequestContextRef.SetPreference(const name  : ustring;
 var
   TempName, TempError : TCefString;
 begin
+  CefStringInitialize(@TempError);
+
   TempName := CefString(name);
-  FillChar(TempError, SizeOf(TempError), 0);
   Result   := PCefRequestContext(FData)^.set_preference(PCefRequestContext(FData), @TempName, CefGetData(value), @TempError) <> 0;
-  error    := CefString(@TempError);
+  error    := CefStringClearAndGet(@TempError);
 end;
 
 procedure TCefRequestContextRef.ClearCertificateExceptions(const callback: ICefCompletionCallback);
@@ -297,6 +307,11 @@ var
 begin
   TempID := CefString(extension_id);
   Result := TCefExtensionRef.UnWrap(PCefRequestContext(FData)^.get_extension(PCefRequestContext(FData), @TempID));
+end;
+
+function TCefRequestContextRef.GetMediaRouter: ICefMediaRouter;
+begin
+  Result := TCefMediaRouterRef.UnWrap(PCefRequestContext(FData)^.get_media_router(PCefRequestContext(FData)));
 end;
 
 function TCefRequestContextRef.RegisterSchemeHandlerFactory(const schemeName : ustring;

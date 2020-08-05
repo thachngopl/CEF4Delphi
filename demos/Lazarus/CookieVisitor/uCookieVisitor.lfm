@@ -15,7 +15,7 @@ object CookieVisitorFrm: TCookieVisitorFrm
   OnDestroy = FormDestroy
   OnShow = FormShow
   Position = poScreenCenter
-  LCLVersion = '2.0.6.0'
+  LCLVersion = '2.0.8.0'
   object AddressBarPnl: TPanel
     Left = 0
     Height = 21
@@ -68,6 +68,7 @@ object CookieVisitorFrm: TCookieVisitorFrm
     OnAfterCreated = Chromium1AfterCreated
     OnBeforeClose = Chromium1BeforeClose
     OnClose = Chromium1Close
+    OnCanSaveCookie = Chromium1CanSaveCookie
     left = 32
     top = 224
   end
@@ -77,10 +78,5 @@ object CookieVisitorFrm: TCookieVisitorFrm
     OnTimer = Timer1Timer
     left = 32
     top = 280
-  end
-  object CEFSentinel1: TCEFSentinel
-    OnClose = CEFSentinel1Close
-    left = 32
-    top = 352
   end
 end

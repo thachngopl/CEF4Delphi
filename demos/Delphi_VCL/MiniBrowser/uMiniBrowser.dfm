@@ -270,7 +270,7 @@ object MiniBrowserFrm: TMiniBrowserFrm
     OnNavigationVisitorResultAvailable = Chromium1NavigationVisitorResultAvailable
     OnDownloadImageFinished = Chromium1DownloadImageFinished
     OnCookiesFlushed = Chromium1CookiesFlushed
-    OnExecuteTaskOnCefThread = Chromium1ExecuteTaskOnCefThread
+    OnZoomPctAvailable = Chromium1ZoomPctAvailable
     OnRenderCompMsg = Chromium1RenderCompMsg
     OnLoadEnd = Chromium1LoadEnd
     OnLoadError = Chromium1LoadError
@@ -293,6 +293,7 @@ object MiniBrowserFrm: TMiniBrowserFrm
     OnBeforeResourceLoad = Chromium1BeforeResourceLoad
     OnResourceResponse = Chromium1ResourceResponse
     OnBeforePluginLoad = Chromium1BeforePluginLoad
+    OnDevToolsMethodResult = Chromium1DevToolsMethodResult
     Left = 32
     Top = 224
   end
@@ -363,9 +364,33 @@ object MiniBrowserFrm: TMiniBrowserFrm
       Caption = 'Simulate keyboard presses'
       OnClick = Simulatekeyboardpresses1Click
     end
+    object Acceptlanguage1: TMenuItem
+      Caption = 'Accept language...'
+      OnClick = Acceptlanguage1Click
+    end
     object Flushcookies1: TMenuItem
       Caption = 'Flush cookies'
       OnClick = Flushcookies1Click
+    end
+    object FindText1: TMenuItem
+      Caption = 'Find text...'
+      OnClick = FindText1Click
+    end
+    object Clearcache1: TMenuItem
+      Caption = 'Clear cache'
+      OnClick = Clearcache1Click
+    end
+    object ClearallstorageforcurrentURL1: TMenuItem
+      Caption = 'Clear all storage for current URL'
+      OnClick = ClearallstorageforcurrentURL1Click
+    end
+    object akescreenshot1: TMenuItem
+      Caption = 'Take screenshot'
+      OnClick = akescreenshot1Click
+    end
+    object Useragent1: TMenuItem
+      Caption = 'User agent...'
+      OnClick = Useragent1Click
     end
     object N5: TMenuItem
       Caption = '-'
@@ -397,10 +422,5 @@ object MiniBrowserFrm: TMiniBrowserFrm
     OnTimer = Timer1Timer
     Left = 32
     Top = 344
-  end
-  object CEFSentinel1: TCEFSentinel
-    OnClose = CEFSentinel1Close
-    Left = 32
-    Top = 408
   end
 end

@@ -50,7 +50,19 @@ uses
   uCEFUrlRequestClientComponent, uCEFOSRIMEHandler, uCEFCookieAccessFilter, 
   uCEFResourceReadCallback, uCEFResourceRequestHandler, 
   uCEFResourceSkipCallback, uCEFSentinel, uCEFApplicationCore, 
-  LazarusPackageIntf;
+  uCEFOAuth2Helper, uCEFMediaObserver, uCEFMediaRoute, 
+  uCEFMediaRouteCreateCallback, uCEFMediaRouter, uCEFMediaSink, 
+  uCEFMediaSource, uCEFRegistration, uCEFWindowDelegate, uCEFWindow, 
+  uCEFMenuButtonDelegate, uCEFMenuButtonPressedLock, uCEFMenuButton, 
+  uCEFLabelButton, uCEFButtonDelegate, uCEFButton, uCEFBrowserViewDelegate, 
+  uCEFBrowserView, uCEFPanelDelegate, uCEFPanel, uCEFScrollView, 
+  uCEFTextfieldDelegate, uCEFTextfield, uCEFViewDelegate, uCEFView, 
+  uCEFFillLayout, uCEFBoxLayout, uCEFLayout, uCEFDisplay, 
+  uCEFMenuButtonComponent, uCEFLabelButtonComponent, uCEFButtonComponent, 
+  uCEFBrowserViewComponent, uCEFWindowComponent, uCEFPanelComponent, 
+  uCEFScrollViewComponent, uCEFTextfieldComponent, uCEFViewComponent, 
+  uCEFViewsFrameworkEvents, uCEFAudioHandler, uCEFDevToolsMessageObserver, 
+  uCEFMediaSinkDeviceInfoCallback, uCEFJson, LazarusPackageIntf;
 
 implementation
 
@@ -66,6 +78,13 @@ begin
   RegisterUnit('uCEFUrlRequestClientComponent', 
     @uCEFUrlRequestClientComponent.Register);
   RegisterUnit('uCEFSentinel', @uCEFSentinel.Register);
+  RegisterUnit('uCEFMenuButtonComponent', @uCEFMenuButtonComponent.Register);
+  RegisterUnit('uCEFLabelButtonComponent', @uCEFLabelButtonComponent.Register);
+  RegisterUnit('uCEFBrowserViewComponent', @uCEFBrowserViewComponent.Register);
+  RegisterUnit('uCEFWindowComponent', @uCEFWindowComponent.Register);
+  RegisterUnit('uCEFPanelComponent', @uCEFPanelComponent.Register);
+  RegisterUnit('uCEFScrollViewComponent', @uCEFScrollViewComponent.Register);
+  RegisterUnit('uCEFTextfieldComponent', @uCEFTextfieldComponent.Register);
 end;
 
 initialization

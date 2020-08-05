@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -75,13 +75,8 @@ type
 implementation
 
 uses
-  FMX.Forms,
-  uSimpleFMXBrowser,
-  uCEFApplication,
-  {$IFDEF MSWINDOWS}
-  Winapi.Messages, Winapi.Windows,
-  {$ENDIF}
-  uCEFConstants;
+  FMX.Forms, {$IFDEF MSWINDOWS}Winapi.Messages, Winapi.Windows,{$ENDIF}
+  uMainForm, uCEFFMXWorkScheduler, uCEFApplication, uCEFConstants;
 
 class procedure TFMXApplicationService.AddPlatformService;
 begin
@@ -160,32 +155,81 @@ begin
       WM_MOVING :
         if not(Application.Terminated) and
            (Application.MainForm <> nil) and
-           (Application.MainForm is TSimpleFMXBrowserFrm) then
-          TSimpleFMXBrowserFrm(Application.MainForm).NotifyMoveOrResizeStarted;
+           (Application.MainForm is TMainForm) then
+          TMainForm(Application.MainForm).NotifyMoveOrResizeStarted;
 
       WM_ENTERMENULOOP :
-        if not(Application.Terminated) and
-           (TempMsg.wParam = 0) and
+        if (TempMsg.wParam = 0) and
            (GlobalCEFApp <> nil) then
           GlobalCEFApp.OsmodalLoop := True;
 
       WM_EXITMENULOOP :
-        if not(Application.Terminated) and
-           (TempMsg.wParam = 0) and
+        if (TempMsg.wParam = 0) and
            (GlobalCEFApp <> nil) then
           GlobalCEFApp.OsmodalLoop := False;
 
-      CEF_AFTERCREATED :
+      WM_CAPTURECHANGED,
+      WM_CANCELMODE :
         if not(Application.Terminated) and
            (Application.MainForm <> nil) and
-           (Application.MainForm is TSimpleFMXBrowserFrm) then
-          TSimpleFMXBrowserFrm(Application.MainForm).DoBrowserCreated;
+           (Application.MainForm is TMainForm) then
+          TMainForm(Application.MainForm).SendCaptureLostEvent;
 
-      CEF_DESTROY :
+      WM_SYSCHAR :
         if not(Application.Terminated) and
            (Application.MainForm <> nil) and
-           (Application.MainForm is TSimpleFMXBrowserFrm) then
-          TSimpleFMXBrowserFrm(Application.MainForm).DoDestroyParent;
+           (Application.MainForm is TMainForm) then
+          TMainForm(Application.MainForm).HandleSYSCHAR(TempMsg);
+
+      WM_SYSKEYDOWN :
+        if not(Application.Terminated) and
+           (Application.MainForm <> nil) and
+           (Application.MainForm is TMainForm) then
+          TMainForm(Application.MainForm).HandleSYSKEYDOWN(TempMsg);
+
+      WM_SYSKEYUP :
+        if not(Application.Terminated) and
+           (Application.MainForm <> nil) and
+           (Application.MainForm is TMainForm) then
+          TMainForm(Application.MainForm).HandleSYSKEYUP(TempMsg);
+
+      WM_KEYDOWN :
+        if not(Application.Terminated) and
+           (Application.MainForm <> nil) and
+           (Application.MainForm is TMainForm) then
+          TMainForm(Application.MainForm).HandleKEYDOWN(TempMsg);
+
+      WM_KEYUP :
+        if not(Application.Terminated) and
+           (Application.MainForm <> nil) and
+           (Application.MainForm is TMainForm) then
+          TMainForm(Application.MainForm).HandleKEYUP(TempMsg);
+
+      WM_POINTERDOWN,
+      WM_POINTERUPDATE,
+      WM_POINTERUP :
+        if not(Application.Terminated) and
+           (Application.MainForm <> nil) and
+           (Application.MainForm is TMainForm) then
+          TMainForm(Application.MainForm).HandlePOINTER(TempMsg);
+
+      CEF_INITIALIZED :
+        if not(Application.Terminated) and
+           (Application.MainForm <> nil) and
+           (Application.MainForm is TMainForm) then
+          TMainForm(Application.MainForm).InitializeUserInterface;
+
+      CEF_PENDINGRESIZE :
+        if not(Application.Terminated) and
+           (Application.MainForm <> nil) and
+           (Application.MainForm is TMainForm) then
+          TMainForm(Application.MainForm).ResizeBrowser(cardinal(TempMsg.wParam));
+
+      CEF_DESTROYTAB :
+        if not(Application.Terminated) and
+           (Application.MainForm <> nil) and
+           (Application.MainForm is TMainForm) then
+          TMainForm(Application.MainForm).DestroyTab(cardinal(TempMsg.wParam));
     end;
   {$ENDIF}
 

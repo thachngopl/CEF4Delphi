@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -98,6 +98,9 @@ var
   // /include/capi/cef_image_capi.h
   cef_image_create : function : PCefImage; cdecl;
 
+  // /include/capi/cef_media_router_capi.h
+  cef_media_router_get_global : function : PCefMediaRouter; cdecl;
+
   // /include/capi/cef_menu_model_capi.h
   cef_menu_model_create : function(delegate: PCefMenuModelDelegate): PCefMenuModel; cdecl;
 
@@ -117,6 +120,7 @@ var
   cef_uriencode                       : function(const text: PCefString; use_plus: Integer): PCefStringUserFree; cdecl;
   cef_uridecode                       : function(const text: PCefString; convert_to_utf8: Integer; unescape_rule: TCefUriUnescapeRule): PCefStringUserFree; cdecl;
   cef_parse_json                      : function(const json_string: PCefString; options: TCefJsonParserOptions): PCefValue; cdecl;
+  cef_parse_json_buffer               : function(const json: Pointer; json_size: NativeUInt; options: TCefJsonParserOptions): PCefValue; cdecl;
   cef_parse_jsonand_return_error      : function(const json_string: PCefString; options: TCefJsonParserOptions; error_code_out: PCefJsonParserError; error_msg_out: PCefString): PCefValue; cdecl;
   cef_write_json                      : function(node: PCefValue; options: TCefJsonWriterOptions): PCefStringUserFree; cdecl;
 
@@ -225,6 +229,12 @@ var
   // /include/capi/cef_zip_reader_capi.h
   cef_zip_reader_create : function(stream: PCefStreamReader): PCefZipReader; cdecl;
 
+
+
+  // *********************************
+  // ************* VIEWS *************
+  // *********************************
+
   // /include/capi/views/cef_browser_view_capi.h
   cef_browser_view_create          : function(client: PCefClient; const url: PCefString; const settings: PCefBrowserSettings; extra_info: PCefDictionaryValue; request_context: PCefRequestContext; delegate: PCefBrowserViewDelegate): PCefBrowserView; cdecl;
   cef_browser_view_get_for_browser : function(browser: PCefBrowser): PCefBrowserView; cdecl;
@@ -234,7 +244,7 @@ var
   cef_display_get_nearest_point   : function(const point: PCefPoint; input_pixel_coords: Integer): PCefDisplay; cdecl;
   cef_display_get_matching_bounds : function(const bounds: PCefRect; input_pixel_coords: Integer): PCefDisplay; cdecl;
   cef_display_get_count           : function : NativeUInt; cdecl;
-  cef_display_get_alls            : procedure(var displaysCount: NativeUInt; var displays: PCefDisplay); cdecl;
+  cef_display_get_alls            : procedure(displaysCount: PNativeUInt; displays: PPCefDisplay); cdecl;
 
   // /include/capi/views/cef_label_button_capi.h
   cef_label_button_create         : function(delegate: PCefButtonDelegate; const text: PCefString): PCefLabelButton; cdecl;
@@ -254,10 +264,16 @@ var
   // /include/capi/views/cef_window_capi.h
   cef_window_create_top_level     : function(delegate: PCefWindowDelegate): PCefWindow; cdecl;
 
+
+
+  // *********************************
+  // *********** INTERNAL ************
+  // *********************************
+
   // /include/internal/cef_logging_internal.h
   cef_get_min_log_level : function : Integer; cdecl;
   cef_get_vlog_level    : function(const file_start: PAnsiChar; N: NativeInt): Integer; cdecl;
-  cef_log               : procedure(const file_: PAnsiChar; line, severity: Integer; const message: PAnsiChar); cdecl;
+  cef_log               : procedure(const file_: PAnsiChar; line, severity: Integer; const message_: PAnsiChar); cdecl;
 
   // /include/internal/cef_string_list.h
   cef_string_list_alloc  : function : TCefStringList; cdecl;
@@ -271,9 +287,9 @@ var
   // /include/internal/cef_string_map.h
   cef_string_map_alloc  : function : TCefStringMap; cdecl;
   cef_string_map_size   : function(map: TCefStringMap): NativeUInt; cdecl;
-  cef_string_map_find   : function(map: TCefStringMap; const key: PCefString; var value: TCefString): Integer; cdecl;
-  cef_string_map_key    : function(map: TCefStringMap; index: NativeUInt; var key: TCefString): Integer; cdecl;
-  cef_string_map_value  : function(map: TCefStringMap; index: NativeUInt; var value: TCefString): Integer; cdecl;
+  cef_string_map_find   : function(map: TCefStringMap; const key: PCefString; value: PCefString): Integer; cdecl;
+  cef_string_map_key    : function(map: TCefStringMap; index: NativeUInt; key: PCefString): Integer; cdecl;
+  cef_string_map_value  : function(map: TCefStringMap; index: NativeUInt; value: PCefString): Integer; cdecl;
   cef_string_map_append : function(map: TCefStringMap; const key, value: PCefString): Integer; cdecl;
   cef_string_map_clear  : procedure(map: TCefStringMap); cdecl;
   cef_string_map_free   : procedure(map: TCefStringMap); cdecl;
@@ -282,9 +298,9 @@ var
   cef_string_multimap_alloc      : function : TCefStringMultimap; cdecl;
   cef_string_multimap_size       : function(map: TCefStringMultimap): NativeUInt; cdecl;
   cef_string_multimap_find_count : function(map: TCefStringMultimap; const key: PCefString): NativeUInt; cdecl;
-  cef_string_multimap_enumerate  : function(map: TCefStringMultimap; const key: PCefString; value_index: NativeUInt; var value: TCefString): Integer; cdecl;
-  cef_string_multimap_key        : function(map: TCefStringMultimap; index: NativeUInt; var key: TCefString): Integer; cdecl;
-  cef_string_multimap_value      : function(map: TCefStringMultimap; index: NativeUInt; var value: TCefString): Integer; cdecl;
+  cef_string_multimap_enumerate  : function(map: TCefStringMultimap; const key: PCefString; value_index: NativeUInt; value: PCefString): Integer; cdecl;
+  cef_string_multimap_key        : function(map: TCefStringMultimap; index: NativeUInt; key: PCefString): Integer; cdecl;
+  cef_string_multimap_value      : function(map: TCefStringMultimap; index: NativeUInt; value: PCefString): Integer; cdecl;
   cef_string_multimap_append     : function(map: TCefStringMultimap; const key, value: PCefString): Integer; cdecl;
   cef_string_multimap_clear      : procedure(map: TCefStringMultimap); cdecl;
   cef_string_multimap_free       : procedure(map: TCefStringMultimap); cdecl;

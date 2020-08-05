@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -47,8 +47,8 @@ interface
 
 uses
   {$IFDEF DELPHI16_UP}
-  {$IFDEF MSWINDOWS}Winapi.Windows, Winapi.Messages, Vcl.ExtCtrls, Vcl.Controls, Vcl.Graphics, WinApi.Imm,{$ENDIF}
-  System.Classes, System.SyncObjs, System.SysUtils,
+  {$IFDEF MSWINDOWS}Winapi.Windows, Winapi.Messages, Vcl.ExtCtrls, Vcl.Controls, Vcl.Graphics, WinApi.Imm, {$ENDIF}
+  System.Classes, System.SyncObjs, System.SysUtils, Vcl.Forms,
   {$ELSE}
     {$IFDEF MSWINDOWS}Windows, imm, {$ENDIF} Classes, Forms, Controls, Graphics,
     {$IFDEF FPC}
@@ -63,6 +63,9 @@ uses
 type
   TOnIMECommitTextEvent     = procedure(Sender: TObject; const aText : ustring; const replacement_range : PCefRange; relative_cursor_pos : integer) of object;
   TOnIMESetCompositionEvent = procedure(Sender: TObject; const aText : ustring; const underlines : TCefCompositionUnderlineDynArray; const replacement_range, selection_range : TCefRange) of object;
+  {$IFDEF MSWINDOWS}
+  TOnHandledMessageEvent    = procedure(Sender: TObject; var aMessage: TMessage; var aHandled : boolean) of object;
+  {$ENDIF}
 
   {$IFNDEF FPC}{$IFDEF DELPHI16_UP}[ComponentPlatformsAttribute(pidWin32 or pidWin64)]{$ENDIF}{$ENDIF}
   TBufferPanel = class(TCustomPanel)
@@ -77,6 +80,10 @@ type
       FOnIMECancelComposition : TNotifyEvent;
       FOnIMECommitText        : TOnIMECommitTextEvent;
       FOnIMESetComposition    : TOnIMESetCompositionEvent;
+      FOnCustomTouch          : TOnHandledMessageEvent;
+      FOnPointerDown          : TOnHandledMessageEvent;
+      FOnPointerUp            : TOnHandledMessageEvent;
+      FOnPointerUpdate        : TOnHandledMessageEvent;
       {$ENDIF}
 
       procedure CreateSyncObj;
@@ -87,6 +94,11 @@ type
       function  GetBufferBits : pointer;
       function  GetBufferWidth : integer;
       function  GetBufferHeight : integer;
+      function  GetScreenScale : single;
+      {$IFDEF MSWINDOWS}
+      function  GetParentFormHandle : TCefWindowHandle;
+      function  GetParentForm : TCustomForm;
+      {$ENDIF}
 
       procedure SetTransparent(aValue : boolean);
 
@@ -98,6 +110,10 @@ type
       procedure CreateParams(var Params: TCreateParams); override;
       procedure WndProc(var aMessage: TMessage); override;
       procedure WMEraseBkgnd(var aMessage : TWMEraseBkgnd); message WM_ERASEBKGND;
+      procedure WMTouch(var aMessage: TMessage); message WM_TOUCH;
+      procedure WMPointerDown(var aMessage: TMessage); message WM_POINTERDOWN;
+      procedure WMPointerUpdate(var aMessage: TMessage); message WM_POINTERUPDATE;
+      procedure WMPointerUp(var aMessage: TMessage); message WM_POINTERUP;
       procedure WMIMEStartComp(var aMessage: TMessage);
       procedure WMIMEEndComp(var aMessage: TMessage);
       procedure WMIMESetContext(var aMessage: TMessage);
@@ -112,17 +128,23 @@ type
       function    InvalidatePanel : boolean;
       function    BeginBufferDraw : boolean;
       procedure   EndBufferDraw;
-      procedure   BufferDraw(x, y : integer; const aBitmap : TBitmap);
+      procedure   BufferDraw(x, y : integer; const aBitmap : TBitmap); overload;
+      procedure   BufferDraw(const aBitmap : TBitmap; const aSrcRect, aDstRect : TRect); overload;
       function    UpdateBufferDimensions(aWidth, aHeight : integer) : boolean;
       function    BufferIsResized(aUseMutex : boolean = True) : boolean;
       procedure   CreateIMEHandler;
       procedure   ChangeCompositionRange(const selection_range : TCefRange; const character_bounds : TCefRectDynArray);
 
-      property Buffer         : TBitmap            read FBuffer;
-      property ScanlineSize   : integer            read FScanlineSize;
-      property BufferWidth    : integer            read GetBufferWidth;
-      property BufferHeight   : integer            read GetBufferHeight;
-      property BufferBits     : pointer            read GetBufferBits;
+      property Buffer           : TBitmap            read FBuffer;
+      property ScanlineSize     : integer            read FScanlineSize;
+      property BufferWidth      : integer            read GetBufferWidth;
+      property BufferHeight     : integer            read GetBufferHeight;
+      property BufferBits       : pointer            read GetBufferBits;
+      property ScreenScale      : single             read GetScreenScale;
+      {$IFDEF MSWINDOWS}
+      property ParentFormHandle : TCefWindowHandle   read GetParentFormHandle;
+      property ParentForm       : TCustomForm        read GetParentForm;
+      {$ENDIF}
 
       property DockManager;
       property Canvas;
@@ -132,6 +154,10 @@ type
       property OnIMECancelComposition    : TNotifyEvent              read FOnIMECancelComposition    write FOnIMECancelComposition;
       property OnIMECommitText           : TOnIMECommitTextEvent     read FOnIMECommitText           write FOnIMECommitText;
       property OnIMESetComposition       : TOnIMESetCompositionEvent read FOnIMESetComposition       write FOnIMESetComposition;
+      property OnCustomTouch             : TOnHandledMessageEvent    read FOnCustomTouch             write FOnCustomTouch;
+      property OnPointerDown             : TOnHandledMessageEvent    read FOnPointerDown             write FOnPointerDown;
+      property OnPointerUp               : TOnHandledMessageEvent    read FOnPointerUp               write FOnPointerUp;
+      property OnPointerUpdate           : TOnHandledMessageEvent    read FOnPointerUpdate           write FOnPointerUpdate;
       {$ENDIF}
       property OnPaintParentBkg          : TNotifyEvent              read FOnPaintParentBkg          write FOnPaintParentBkg;
 
@@ -240,15 +266,20 @@ constructor TBufferPanel.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  FMutex       := 0;
-  FBuffer      := nil;
-  FTransparent := False;
+  FMutex            := 0;
+  FBuffer           := nil;
+  FTransparent      := False;
+  FOnPaintParentBkg := nil;
 
   {$IFDEF MSWINDOWS}
   FIMEHandler             := nil;
   FOnIMECancelComposition := nil;
   FOnIMECommitText        := nil;
   FOnIMESetComposition    := nil;
+  FOnCustomTouch          := nil;
+  FOnPointerDown          := nil;
+  FOnPointerUp            := nil;
+  FOnPointerUpdate        := nil;
   {$ENDIF}
 end;
 
@@ -373,10 +404,11 @@ end;
 function TBufferPanel.CopyBuffer : boolean;
 {$IFDEF MSWINDOWS}
 var
-  TempFunction : TBlendFunction;
+  TempFunction  : TBlendFunction;
 {$ENDIF}
 begin
   Result := False;
+
   {$IFDEF MSWINDOWS}
   if BeginBufferDraw then
     try
@@ -465,6 +497,50 @@ end;
 procedure TBufferPanel.WMEraseBkgnd(var aMessage : TWMEraseBkgnd);
 begin
   aMessage.Result := 1;
+end;
+
+procedure TBufferPanel.WMTouch(var aMessage: TMessage);
+var
+  TempHandled : boolean;
+begin
+  TempHandled := False;
+  {$IFDEF MSWINDOWS}
+  if assigned(FOnCustomTouch) then FOnCustomTouch(self, aMessage, TempHandled);
+  {$ENDIF}
+  if not(TempHandled) then inherited;
+end;
+
+procedure TBufferPanel.WMPointerDown(var aMessage: TMessage);
+var
+  TempHandled : boolean;
+begin
+  TempHandled := False;
+  {$IFDEF MSWINDOWS}
+  if assigned(FOnPointerDown) then FOnPointerDown(self, aMessage, TempHandled);
+  {$ENDIF}
+  if not(TempHandled) then inherited;
+end;
+
+procedure TBufferPanel.WMPointerUpdate(var aMessage: TMessage);
+var
+  TempHandled : boolean;
+begin
+  TempHandled := False;
+  {$IFDEF MSWINDOWS}
+  if assigned(FOnPointerUpdate) then FOnPointerUpdate(self, aMessage, TempHandled);
+  {$ENDIF}
+  if not(TempHandled) then inherited;
+end;
+
+procedure TBufferPanel.WMPointerUp(var aMessage: TMessage);
+var
+  TempHandled : boolean;
+begin
+  TempHandled := False;
+  {$IFDEF MSWINDOWS}
+  if assigned(FOnPointerUp) then FOnPointerUp(self, aMessage, TempHandled);
+  {$ENDIF}
+  if not(TempHandled) then inherited;
 end;
 
 procedure TBufferPanel.WMIMEStartComp(var aMessage: TMessage);
@@ -586,6 +662,64 @@ begin
     Result := 0;
 end;
 
+function TBufferPanel.GetScreenScale : single;
+{$IFDEF MSWINDOWS}
+var
+  TempHandle : TCefWindowHandle;
+  TempDC     : HDC;
+{$ENDIF}
+begin
+  {$IFDEF MSWINDOWS}
+  TempHandle := ParentFormHandle;
+
+  if (TempHandle <> 0) then
+    begin
+      TempDC := GetWindowDC(TempHandle);
+      Result := GetDeviceCaps(TempDC, LOGPIXELSX) / USER_DEFAULT_SCREEN_DPI;
+      ReleaseDC(TempHandle, TempDC);
+    end
+   else
+  {$ENDIF}
+    if (GlobalCEFApp <> nil) then
+      Result := GlobalCEFApp.DeviceScaleFactor
+     else
+      Result := 1;
+end;
+
+{$IFDEF MSWINDOWS}
+function TBufferPanel.GetParentForm : TCustomForm;
+var
+  TempComp : TComponent;
+begin
+  Result   := nil;
+  TempComp := Owner;
+
+  while (TempComp <> nil) do
+    if (TempComp is TCustomForm) then
+      begin
+        Result := TCustomForm(TempComp);
+        exit;
+      end
+     else
+      TempComp := TempComp.owner;
+end;
+
+function TBufferPanel.GetParentFormHandle : TCefWindowHandle;
+var
+  TempForm : TCustomForm;
+begin
+  Result   := 0;
+  TempForm := GetParentForm;
+
+  if (TempForm <> nil)  then
+    Result := TempForm.Handle
+   else
+    if (Application          <> nil) and
+       (Application.MainForm <> nil) then
+      Result := Application.MainForm.Handle;
+end;
+{$ENDIF}
+
 procedure TBufferPanel.SetTransparent(aValue : boolean);
 begin
   if (FTransparent <> aValue) then
@@ -601,6 +735,11 @@ end;
 procedure TBufferPanel.BufferDraw(x, y : integer; const aBitmap : TBitmap);
 begin
   if (FBuffer <> nil) then FBuffer.Canvas.Draw(x, y, aBitmap);
+end;
+
+procedure TBufferPanel.BufferDraw(const aBitmap : TBitmap; const aSrcRect, aDstRect : TRect);
+begin
+  if (FBuffer <> nil) then FBuffer.Canvas.CopyRect(aDstRect, aBitmap.Canvas, aSrcRect);
 end;
 
 function TBufferPanel.UpdateBufferDimensions(aWidth, aHeight : integer) : boolean;
@@ -627,13 +766,16 @@ end;
 function TBufferPanel.BufferIsResized(aUseMutex : boolean) : boolean;
 var
   TempDevWidth, TempLogWidth, TempDevHeight, TempLogHeight : integer;
+  TempScale : single;
 begin
   Result := False;
   if (GlobalCEFApp = nil) then exit;
 
   if not(aUseMutex) or BeginBufferDraw then
     begin
-      if (GlobalCEFApp.DeviceScaleFactor = 1) then
+      TempScale := ScreenScale;
+
+      if (TempScale = 1) then
         begin
           Result := (FBuffer <> nil) and
                     (FBuffer.Width  = Width) and
@@ -645,11 +787,11 @@ begin
           // and Delphi uses MulDiv, which uses the bankers rounding, to resize the components in high DPI mode.
           // This is the cause of slight differences in size between the buffer and the panel in some occasions.
 
-          TempLogWidth  := DeviceToLogical(Width,  GlobalCEFApp.DeviceScaleFactor);
-          TempLogHeight := DeviceToLogical(Height, GlobalCEFApp.DeviceScaleFactor);
+          TempLogWidth  := DeviceToLogical(Width,  TempScale);
+          TempLogHeight := DeviceToLogical(Height, TempScale);
 
-          TempDevWidth  := LogicalToDevice(TempLogWidth,  GlobalCEFApp.DeviceScaleFactor);
-          TempDevHeight := LogicalToDevice(TempLogHeight, GlobalCEFApp.DeviceScaleFactor);
+          TempDevWidth  := LogicalToDevice(TempLogWidth,  TempScale);
+          TempDevHeight := LogicalToDevice(TempLogHeight, TempScale);
 
           Result := (FBuffer <> nil) and
                     (FBuffer.Width  = TempDevWidth) and

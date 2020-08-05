@@ -2,7 +2,7 @@ object FMXExternalPumpBrowserFrm: TFMXExternalPumpBrowserFrm
   Left = 0
   Top = 0
   Caption = 'Initializing browser. Please wait...'
-  ClientHeight = 534
+  ClientHeight = 633
   ClientWidth = 800
   Position = ScreenCenter
   FormFactor.Width = 320
@@ -34,7 +34,7 @@ object FMXExternalPumpBrowserFrm: TFMXExternalPumpBrowserFrm
       Size.PlatformDefault = False
       OnEnter = AddressEdtEnter
     end
-    object Panel2: TPanel
+    object Layout1: TLayout
       Align = Right
       Padding.Left = 5.000000000000000000
       Position.X = 714.000000000000000000
@@ -42,7 +42,7 @@ object FMXExternalPumpBrowserFrm: TFMXExternalPumpBrowserFrm
       Size.Width = 81.000000000000000000
       Size.Height = 23.000000000000000000
       Size.PlatformDefault = False
-      TabOrder = 1
+      TabOrder = 2
       object GoBtn: TButton
         Align = Left
         Position.X = 5.000000000000000000
@@ -90,7 +90,7 @@ object FMXExternalPumpBrowserFrm: TFMXExternalPumpBrowserFrm
     Color = claTomato
     CanFocus = True
     Size.Width = 800.000000000000000000
-    Size.Height = 501.000000000000000000
+    Size.Height = 600.000000000000000000
     Size.PlatformDefault = False
     OnEnter = Panel1Enter
     OnExit = Panel1Exit
@@ -101,8 +101,8 @@ object FMXExternalPumpBrowserFrm: TFMXExternalPumpBrowserFrm
     OnMouseUp = Panel1MouseUp
     OnMouseLeave = Panel1MouseLeave
     OnMouseWheel = Panel1MouseWheel
-    OnKeyUp = Panel1KeyUp
     OnKeyDown = Panel1KeyDown
+    OnDialogKey = Panel1DialogKey
   end
   object chrmosr: TFMXChromium
     OnTooltip = chrmosrTooltip

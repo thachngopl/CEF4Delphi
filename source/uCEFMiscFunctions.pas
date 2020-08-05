@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -50,9 +50,15 @@ interface
 
 uses
   {$IFDEF DELPHI16_UP}
-    {$IFDEF MSWINDOWS}WinApi.Windows, WinApi.ActiveX,{$ENDIF} System.IOUtils, System.Classes, System.SysUtils, System.UITypes, System.Math,
+    {$IFDEF MSWINDOWS}
+      WinApi.Windows, WinApi.ActiveX, {$IFDEF FMX}FMX.Types,{$ENDIF}
+    {$ELSE}
+      {$IFDEF FMX}FMX.Types,{$ENDIF} {$IFDEF MACOS}Macapi.Foundation, FMX.Helpers.Mac,{$ENDIF}
+    {$ENDIF}
+    System.Types, System.IOUtils, System.Classes, System.SysUtils, System.UITypes, System.Math,
   {$ELSE}
-    {$IFDEF MSWINDOWS}Windows, ActiveX,{$ENDIF} {$IFDEF DELPHI14_UP}IOUtils,{$ENDIF} Classes, SysUtils, Math,
+    {$IFDEF MSWINDOWS}Windows, ActiveX,{$ENDIF}
+    {$IFDEF DELPHI14_UP}Types, IOUtils,{$ENDIF} Classes, SysUtils, Math,
     {$IFDEF FPC}LCLType,{$IFNDEF MSWINDOWS}InterfaceBase, Forms,{$ENDIF}{$ENDIF}
   {$ENDIF}
   uCEFTypes, uCEFInterfaces, uCEFLibFunctions, uCEFResourceHandler,
@@ -61,6 +67,32 @@ uses
 const
   Kernel32DLL = 'kernel32.dll';
   SHLWAPIDLL  = 'shlwapi.dll';
+  NTDLL = 'ntdll.dll';
+
+type
+  TOSVersionInfoEx = record
+    dwOSVersionInfoSize: DWORD;
+    dwMajorVersion: DWORD;
+    dwMinorVersion: DWORD;
+    dwBuildNumber: DWORD;
+    dwPlatformId: DWORD;
+    szCSDVersion: array[0..127] of WideChar;
+    wServicePackMajor: WORD;
+    wServicePackMinor: WORD;
+    wSuiteMask: WORD;
+    wProductType: BYTE;
+    wReserved:BYTE;
+  end;
+  {$IFDEF DELPHI14_UP}
+  TDigitizerStatus = record
+    IntegratedTouch : boolean;
+    ExternalTouch   : boolean;
+    IntegratedPen   : boolean;
+    ExternalPen     : boolean;
+    MultiInput      : boolean;
+    Ready           : boolean;
+  end;
+  {$ENDIF}
 
 function CefColorGetA(color: TCefColor): Byte;
 function CefColorGetR(color: TCefColor): byte;
@@ -78,7 +110,7 @@ function CefGetObject(ptr: Pointer): TObject;  {$IFDEF SUPPORTS_INLINE} inline; 
 function CefGetData(const i: ICefBaseRefCounted): Pointer; {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF}
 
 function CefStringAlloc(const str: ustring): TCefString;
-function CefStringClearAndGet(var str: TCefString): ustring;
+function CefStringClearAndGet(str: PCefString): ustring;
 
 function  CefString(const str: ustring): TCefString; overload;
 function  CefString(const str: PCefString): ustring; overload;
@@ -86,6 +118,7 @@ function  CefUserFreeString(const str: ustring): PCefStringUserFree;
 procedure CefStringFree(const str: PCefString);
 function  CefStringFreeAndGet(const str: PCefStringUserFree): ustring;
 procedure CefStringSet(const str: PCefString; const value: ustring);
+procedure CefStringInitialize(const aCefString : PCefString); {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF}
 
 function CefRegisterExtension(const name, code: ustring; const Handler: ICefv8Handler): Boolean;
 
@@ -93,8 +126,11 @@ function CefPostTask(aThreadId : TCefThreadId; const aTask: ICefTask) : boolean;
 function CefPostDelayedTask(aThreadId : TCefThreadId; const aTask : ICefTask; aDelayMs : Int64) : boolean;
 function CefCurrentlyOn(aThreadId : TCefThreadId) : boolean;
 
+{$IFNDEF MACOS}
 function CefTimeToSystemTime(const dt: TCefTime): TSystemTime;
 function SystemTimeToCefTime(const dt: TSystemTime): TCefTime;
+{$ENDIF}
+
 function CefTimeToDateTime(const dt: TCefTime): TDateTime;
 function DateTimeToCefTime(dt: TDateTime): TCefTime;
 
@@ -110,9 +146,9 @@ procedure WindowInfoAsWindowless(var aWindowInfo : TCefWindowInfo; aParent : TCe
 {$ENDIF}
 
 {$IFDEF MACOS}
-procedure WindowInfoAsChild(var aWindowInfo : TCefWindowInfo; aParent : TCefWindowHandle; aRect : TRect; aHidden : boolean = False; const aWindowName : ustring = '');
-procedure WindowInfoAsPopUp(var aWindowInfo : TCefWindowInfo; aParent : TCefWindowHandle; aHidden : boolean = False; const aWindowName : ustring = '');
-procedure WindowInfoAsWindowless(var aWindowInfo : TCefWindowInfo; aParent : TCefWindowHandle; aHidden : boolean = False; const aWindowName : ustring = '');
+procedure WindowInfoAsChild(var aWindowInfo : TCefWindowInfo; aParent : TCefWindowHandle; aRect : TRect; const aWindowName : ustring = ''; aHidden : boolean = False);
+procedure WindowInfoAsPopUp(var aWindowInfo : TCefWindowInfo; aParent : TCefWindowHandle; const aWindowName : ustring = ''; aHidden : boolean = False);
+procedure WindowInfoAsWindowless(var aWindowInfo : TCefWindowInfo; aParent : TCefWindowHandle; const aWindowName : ustring = ''; aHidden : boolean = False);
 {$ENDIF}
 
 {$IFDEF LINUX}
@@ -122,7 +158,7 @@ procedure WindowInfoAsWindowless(var aWindowInfo : TCefWindowInfo; aParent : TCe
 {$ENDIF}
 
 {$IFDEF MSWINDOWS}
-function ProcessUnderWow64(hProcess: THandle; var Wow64Process: BOOL): BOOL; external Kernel32DLL name 'IsWow64Process';
+function ProcessUnderWow64(hProcess: THandle; var Wow64Process: BOOL): BOOL; stdcall; external Kernel32DLL name 'IsWow64Process';
 function TzSpecificLocalTimeToSystemTime(lpTimeZoneInformation: PTimeZoneInformation; lpLocalTime, lpUniversalTime: PSystemTime): BOOL; stdcall; external Kernel32DLL;
 function SystemTimeToTzSpecificLocalTime(lpTimeZoneInformation: PTimeZoneInformation; lpUniversalTime, lpLocalTime: PSystemTime): BOOL; stdcall; external Kernel32DLL;
 function PathIsRelativeAnsi(pszPath: LPCSTR): BOOL; stdcall; external SHLWAPIDLL name 'PathIsRelativeA';
@@ -162,6 +198,8 @@ procedure CefSetCrashKeyValue(const aKey, aValue : ustring);
 
 procedure CefLog(const aFile : string; aLine, aSeverity : integer; const aMessage : string);
 procedure CefDebugLog(const aMessage : string; aSeverity : integer = CEF_LOG_SEVERITY_ERROR);
+procedure CefKeyEventLog(const aEvent : TCefKeyEvent);
+procedure CefMouseEventLog(const aEvent : TCefMouseEvent);
 procedure OutputDebugMessage(const aMessage : string);
 function  CustomExceptionHandler(const aFunctionName : string; const aException : exception) : boolean;
 
@@ -174,9 +212,10 @@ function CefClearCrossOriginWhitelist: Boolean;
 
 procedure UInt64ToFileVersionInfo(const aVersion : uint64; var aVersionInfo : TFileVersionInfo);
 {$IFDEF MSWINDOWS}
-function  GetExtendedFileVersion(const aFileName : string) : uint64;
-function  GetStringFileInfo(const aFileName, aField : string; var aValue : string) : boolean;
-function  GetDLLVersion(const aDLLFile : string; var aVersionInfo : TFileVersionInfo) : boolean;
+function  GetExtendedFileVersion(const aFileName : ustring) : uint64;
+function  GetStringFileInfo(const aFileName, aField : ustring; var aValue : ustring) : boolean;
+function  GetDLLVersion(const aDLLFile : ustring; var aVersionInfo : TFileVersionInfo) : boolean;
+procedure OutputLastErrorMessage;
 {$ENDIF}
 
 function SplitLongString(aSrcString : string) : string;
@@ -186,8 +225,8 @@ function CheckLocales(const aLocalesDirPath : string; var aMissingFiles : string
 function CheckResources(const aResourcesDirPath : string; var aMissingFiles : string; aCheckDevResources: boolean = True; aCheckExtensions: boolean = True) : boolean;
 function CheckDLLs(const aFrameworkDirPath : string; var aMissingFiles : string) : boolean;
 {$IFDEF MSWINDOWS}
-function CheckDLLVersion(const aDLLFile : string; aMajor, aMinor, aRelease, aBuild : uint16) : boolean;   
-function GetDLLHeaderMachine(const aDLLFile : string; var aMachine : integer) : boolean;
+function CheckDLLVersion(const aDLLFile : ustring; aMajor, aMinor, aRelease, aBuild : uint16) : boolean;
+function GetDLLHeaderMachine(const aDLLFile : ustring; var aMachine : integer) : boolean;
 {$ENDIF}
 function FileVersionInfoToString(const aVersionInfo : TFileVersionInfo) : string;
 function CheckFilesExist(var aList : TStringList; var aMissingFiles : string) : boolean;
@@ -204,12 +243,7 @@ function CefBase64Decode(const data: ustring): ICefBinaryValue;
 function CefUriEncode(const text: ustring; usePlus: Boolean): ustring;
 function CefUriDecode(const text: ustring; convertToUtf8: Boolean; unescapeRule: TCefUriUnescapeRule): ustring;
 
-function CefParseJson(const jsonString: ustring; options: TCefJsonParserOptions): ICefValue;
-function CefParseJsonAndReturnError(const jsonString   : ustring;
-                                          options      : TCefJsonParserOptions;
-                                    out   errorCodeOut : TCefJsonParserError;
-                                    out   errorMsgOut  : ustring): ICefValue;
-function CefWriteJson(const node: ICefValue; options: TCefJsonWriterOptions): ustring;
+function CefGetPath(const aPathKey : TCefPathKey) : ustring;
 
 function CefCreateDirectory(const fullPath: ustring): Boolean;
 function CefGetTempDirectory(out tempDir: ustring): Boolean;
@@ -221,18 +255,29 @@ function CefZipDirectory(const srcDir, destFile: ustring; includeHiddenFiles: Bo
 procedure CefLoadCRLSetsFile(const path : ustring);
 
 {$IFDEF MSWINDOWS}
-function CefIsKeyDown(aWparam : WPARAM) : boolean;
-function CefIsKeyToggled(aWparam : WPARAM) : boolean;
-function GetCefMouseModifiers : TCefEventFlags; overload;                                
-function GetCefMouseModifiers(awparam : WPARAM) : TCefEventFlags; overload;
-function GetCefKeyboardModifiers(aWparam : WPARAM; aLparam : LPARAM) : TCefEventFlags;  
+function  CefIsKeyDown(aWparam : WPARAM) : boolean;
+function  CefIsKeyToggled(aWparam : WPARAM) : boolean;
+function  GetCefMouseModifiers : TCefEventFlags; overload;
+function  GetCefMouseModifiers(awparam : WPARAM) : TCefEventFlags; overload;
+function  GetCefKeyboardModifiers(aWparam : WPARAM; aLparam : LPARAM) : TCefEventFlags;
+procedure CefCheckAltGrPressed(aWparam : WPARAM; var aEvent : TCefKeyEvent);
 
 procedure DropEffectToDragOperation(aEffect : Longint; var aAllowedOps : TCefDragOperations);
 procedure DragOperationToDropEffect(const aDragOperations : TCefDragOperations; var aEffect: Longint);
+
+function  GetWindowsMajorMinorVersion(var wMajorVersion, wMinorVersion : DWORD) : boolean;
+function  GetDefaultCEFUserAgent : string;
+{$IFDEF DELPHI14_UP}
+function  TouchPointToPoint(aHandle : HWND; const TouchPoint: TTouchInput): TPoint;
+function  GetDigitizerStatus(var aDigitizerStatus : TDigitizerStatus; aDPI : cardinal = 0) : boolean;
+function  HasTouchOrPen(aDPI : cardinal = 0) : boolean;
+{$ENDIF}
 {$ENDIF}
 
 function  DeviceToLogical(aValue : integer; const aDeviceScaleFactor : double) : integer; overload;
+function  DeviceToLogical(aValue : single; const aDeviceScaleFactor : double) : single; overload;
 procedure DeviceToLogical(var aEvent : TCEFMouseEvent; const aDeviceScaleFactor : double); overload;
+procedure DeviceToLogical(var aEvent : TCefTouchEvent; const aDeviceScaleFactor : double); overload;
 procedure DeviceToLogical(var aPoint : TPoint; const aDeviceScaleFactor : double); overload;
 function  LogicalToDevice(aValue : integer; const aDeviceScaleFactor : double) : integer; overload;
 procedure LogicalToDevice(var aRect : TCEFRect; const aDeviceScaleFactor : double); overload;
@@ -246,6 +291,9 @@ function MoveFileList(const aFileList : TStringList; const aSrcDirectory, aDstDi
 
 function CefGetDataURI(const aString, aMimeType : ustring) : ustring; overload;
 function CefGetDataURI(aData : pointer; aSize : integer; const aMimeType : ustring; const aCharset : ustring = '') : ustring; overload;
+
+function ValidCefWindowHandle(aHandle : TCefWindowHandle) : boolean;
+procedure InitializeWindowHandle(var aHandle : TCefWindowHandle);
 
 implementation
 
@@ -293,12 +341,12 @@ begin
   Result := (int64_val shr 32) and $FFFFFFFF;
 end;
 
-function CefStringClearAndGet(var str: TCefString): ustring;
+function CefStringClearAndGet(str: PCefString): ustring;
 begin
-  if (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
+  if (str <> nil) and (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
     begin
-      Result := CefString(@str);
-      cef_string_utf16_clear(@str);
+      Result := CefString(str);
+      cef_string_utf16_clear(str);
     end
    else
     Result := '';
@@ -325,7 +373,7 @@ end;
 
 function CefString(const str: PCefString): ustring;
 begin
-  if (str <> nil) then
+  if (str <> nil) and (str^.str <> nil) and (str^.length > 0) and (str^.length < nativeuint(high(integer))) then
     SetString(Result, str^.str, str^.length)
    else
     Result := '';
@@ -347,7 +395,17 @@ end;
 procedure CefStringSet(const str: PCefString; const value: ustring);
 begin
   if (str <> nil) and (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
-    cef_string_utf16_set(PWideChar(value), Length(value), str, 1);
+    cef_string_utf16_set(PWideChar(value), Length(value), str, Ord(True));
+end;
+
+procedure CefStringInitialize(const aCefString : PCefString); {$IFDEF SUPPORTS_INLINE} inline; {$ENDIF}
+begin
+  if (aCefString <> nil) then
+    begin
+      aCefString^.str    := nil;
+      aCefString^.length := 0;
+      aCefString^.dtor   := nil;
+    end;
 end;
 
 function CefStringFreeAndGet(const str: PCefStringUserFree): ustring;
@@ -363,10 +421,12 @@ end;
 
 function CefStringAlloc(const str: ustring): TCefString;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  CefStringInitialize(@Result);
+
   if (str <> '') and (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
     cef_string_wide_to_utf16(PWideChar(str), Length(str), @Result);
 end;
+
 
 procedure _free_string(str: PChar16); stdcall;
 begin
@@ -393,7 +453,7 @@ var
 begin
   if (GlobalCEFApp <> nil) and
      GlobalCEFApp.LibLoaded and
-     (GlobalCEFApp.ProcessType = ptRenderer) and
+     ((GlobalCEFApp.ProcessType = ptRenderer) or GlobalCEFApp.SingleProcess) and
      (length(name) > 0) and
      (length(code) > 0) then
     begin
@@ -429,6 +489,7 @@ begin
     Result := False;
 end;
 
+{$IFNDEF MACOS}
 function CefTimeToSystemTime(const dt: TCefTime): TSystemTime;
 begin
   {$IFDEF MSWINDOWS}
@@ -474,6 +535,7 @@ begin
   Result.millisecond  := dt.Millisecond;
   {$ENDIF}
 end;
+{$ENDIF}
 
 function CefTimeToDateTime(const dt: TCefTime): TDateTime;
 {$IFDEF MSWINDOWS}
@@ -617,7 +679,7 @@ end;
 {$ENDIF}
 
 {$IFDEF MACOS}
-procedure WindowInfoAsChild(var aWindowInfo : TCefWindowInfo; aParent : TCefWindowHandle; aRect : TRect; aHidden : boolean; const aWindowName : ustring);
+procedure WindowInfoAsChild(var aWindowInfo : TCefWindowInfo; aParent : TCefWindowHandle; aRect : TRect; const aWindowName : ustring; aHidden : boolean);
 begin
   aWindowInfo.window_name                  := CefString(aWindowName);
   aWindowInfo.x                            := aRect.left;
@@ -632,13 +694,13 @@ begin
   aWindowInfo.view                         := 0;
 end;
 
-procedure WindowInfoAsPopUp(var aWindowInfo : TCefWindowInfo; aParent : TCefWindowHandle; aHidden : boolean; const aWindowName : ustring);
+procedure WindowInfoAsPopUp(var aWindowInfo : TCefWindowInfo; aParent : TCefWindowHandle; const aWindowName : ustring; aHidden : boolean);
 begin
   aWindowInfo.window_name                  := CefString(aWindowName);
-  aWindowInfo.x                            := integer(CW_USEDEFAULT);
-  aWindowInfo.y                            := integer(CW_USEDEFAULT);
-  aWindowInfo.width                        := integer(CW_USEDEFAULT);
-  aWindowInfo.height                       := integer(CW_USEDEFAULT);
+  aWindowInfo.x                            := 0;
+  aWindowInfo.y                            := 0;
+  aWindowInfo.width                        := 0;
+  aWindowInfo.height                       := 0;
   aWindowInfo.hidden                       := Ord(aHidden);
   aWindowInfo.parent_view                  := aParent;
   aWindowInfo.windowless_rendering_enabled := ord(False);
@@ -647,9 +709,8 @@ begin
   aWindowInfo.view                         := 0;
 end;
 
-procedure WindowInfoAsWindowless(var aWindowInfo : TCefWindowInfo; aParent : TCefWindowHandle; aHidden : boolean; const aWindowName : ustring);
+procedure WindowInfoAsWindowless(var aWindowInfo : TCefWindowInfo; aParent : TCefWindowHandle; const aWindowName : ustring; aHidden : boolean);
 begin
-
   aWindowInfo.window_name                  := CefString(aWindowName);
   aWindowInfo.x                            := 0;
   aWindowInfo.y                            := 0;
@@ -701,7 +762,7 @@ begin
   aWindowInfo.width                        := 0;
   aWindowInfo.height                       := 0;
   aWindowInfo.parent_window                := aParent;
-  aWindowInfo.windowless_rendering_enabled := ord(False);
+  aWindowInfo.windowless_rendering_enabled := ord(True);
   aWindowInfo.shared_texture_enabled       := ord(False);
   aWindowInfo.external_begin_frame_enabled := ord(False);
   aWindowInfo.window                       := 0;
@@ -756,9 +817,13 @@ begin
   if (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
     begin
       {$IFDEF MSWINDOWS}
-      TempString := 'PID: ' + IntToStr(GetCurrentProcessID) + ', TID: ' + IntToStr(GetCurrentThreadID);
+        TempString := 'PID: ' + IntToStr(GetCurrentProcessID) + ', TID: ' + IntToStr(GetCurrentThreadID);
       {$ELSE}
-      TempString := 'PID: ' + IntToStr(GetProcessID()) + ', TID: ' + IntToStr(GetCurrentThreadID());
+        {$IFDEF MACOS}
+        TempString := 'PID: ' + IntToStr(TNSProcessInfo.Wrap(TNSProcessInfo.OCClass.processInfo).processIdentifier) + ', TID: ' + IntToStr(TThread.Current.ThreadID);
+        {$ELSE}
+        TempString := 'PID: ' + IntToStr(GetProcessID()) + ', TID: ' + IntToStr(GetCurrentThreadID());
+        {$ENDIF}
       {$ENDIF}
 
       case GlobalCEFApp.ProcessType of
@@ -766,10 +831,54 @@ begin
         ptRenderer  : TempString := TempString + ', PT: Renderer';
         ptZygote    : TempString := TempString + ', PT: Zygote';
         ptGPU       : TempString := TempString + ', PT: GPU';
-        else          TempString := TempString + ', PT: Other';
+        ptUtility   : TempString := TempString + ', PT: Utility';
+        ptOther     : TempString := TempString + ', PT: Other';
       end;
 
       CefLog('CEF4Delphi', DEFAULT_LINE, aSeverity, TempString + ' - ' + aMessage);
+    end;
+end;
+
+procedure CefKeyEventLog(const aEvent : TCefKeyEvent);
+const
+  DEFAULT_LINE = 1;
+var
+  TempString : string;
+begin
+  if (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
+    begin
+      case aEvent.kind of
+        KEYEVENT_RAWKEYDOWN : TempString := 'kind: KEYEVENT_RAWKEYDOWN';
+        KEYEVENT_KEYDOWN    : TempString := 'kind: KEYEVENT_KEYDOWN';
+        KEYEVENT_KEYUP      : TempString := 'kind: KEYEVENT_KEYUP';
+        KEYEVENT_CHAR       : TempString := 'kind: KEYEVENT_CHAR';
+      end;
+
+      TempString := TempString + ', modifiers: $'              + inttohex(aEvent.modifiers, SizeOf(aEvent.modifiers) * 2);
+      TempString := TempString + ', windows_key_code: $'       + inttohex(aEvent.windows_key_code, SizeOf(aEvent.windows_key_code) * 2);
+      TempString := TempString + ', native_key_code: $'        + inttohex(aEvent.native_key_code, SizeOf(aEvent.native_key_code) * 2);
+      TempString := TempString + ', is_system_key: '           + BoolToStr((aEvent.is_system_key <> 0), true);
+      TempString := TempString + ', character: $'              + inttohex(ord(aEvent.character), SizeOf(aEvent.character) * 2);
+      TempString := TempString + ', unmodified_character: $'   + inttohex(ord(aEvent.unmodified_character), SizeOf(aEvent.unmodified_character) * 2);
+      TempString := TempString + ', focus_on_editable_field: ' + BoolToStr((aEvent.focus_on_editable_field <> 0), true);;
+
+      CefLog('CEF4Delphi', DEFAULT_LINE, CEF_LOG_SEVERITY_INFO, TempString);
+    end;
+end;
+
+procedure CefMouseEventLog(const aEvent : TCefMouseEvent);
+const
+  DEFAULT_LINE = 1;
+var
+  TempString : string;
+begin
+  if (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
+    begin
+      TempString := TempString + ', x: $'         + inttohex(aEvent.x, SizeOf(aEvent.x) * 2);
+      TempString := TempString + ', y: $'         + inttohex(aEvent.y, SizeOf(aEvent.y) * 2);
+      TempString := TempString + ', modifiers: $' + inttohex(aEvent.modifiers, SizeOf(aEvent.modifiers) * 2);
+
+      CefLog('CEF4Delphi', DEFAULT_LINE, CEF_LOG_SEVERITY_INFO, TempString);
     end;
 end;
 
@@ -778,7 +887,13 @@ const
   DEFAULT_LINE = 1;
 begin
   {$IFDEF DEBUG}
-  OutputDebugString({$IFDEF DELPHI12_UP}PWideChar{$ELSE}PAnsiChar{$ENDIF}(aMessage + chr(0)));
+  {$IFDEF FMX}
+    FMX.Types.Log.d(aMessage);
+  {$ELSE}
+    {$IFDEF MSWINDOWS}
+    OutputDebugString({$IFDEF DELPHI12_UP}PWideChar{$ELSE}PAnsiChar{$ENDIF}(aMessage + chr(0)));
+    {$ENDIF}
+  {$ENDIF}
 
   if (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
     CefLog('CEF4Delphi', DEFAULT_LINE, CEF_LOG_SEVERITY_ERROR, aMessage);
@@ -1018,7 +1133,6 @@ begin
       TempExists := GetAbsoluteDirPath(aResourcesDirPath, TempDir);
 
       TempList := TStringList.Create;
-      TempList.Add(TempDir + 'natives_blob.bin');
       TempList.Add(TempDir + 'snapshot_blob.bin');
       TempList.Add(TempDir + 'v8_context_snapshot.bin');
       TempList.Add(TempDir + 'cef.pak');
@@ -1073,9 +1187,9 @@ begin
       // http://www.magpcss.org/ceforum/viewtopic.php?f=6&t=14503#p32263
 
       TempList := TStringList.Create;
-      TempList.Add(TempDir + CHROMEELF_DLL);
       TempList.Add(TempDir + LIBCEF_DLL);
       {$IFDEF MSWINDOWS}
+      TempList.Add(TempDir + CHROMEELF_DLL);
       TempList.Add(TempDir + 'd3dcompiler_47.dll');
       TempList.Add(TempDir + 'libEGL.dll');
       TempList.Add(TempDir + 'libGLESv2.dll');
@@ -1140,7 +1254,7 @@ begin
 end;
 
 {$IFDEF MSWINDOWS}
-function GetExtendedFileVersion(const aFileName : string) : uint64;
+function GetExtendedFileVersion(const aFileName : ustring) : uint64;
 var
   TempSize   : DWORD;
   TempBuffer : pointer;
@@ -1153,20 +1267,22 @@ begin
 
   try
     try
-      TempSize := GetFileVersioninfoSize(PChar(aFileName), TempHandle);
+      TempSize := GetFileVersionInfoSizeW(PWideChar(aFileName), TempHandle);
 
       if (TempSize > 0) then
         begin
           GetMem(TempBuffer, TempSize);
 
-          if GetFileVersionInfo(PChar(aFileName), TempHandle, TempSize, TempBuffer) and
+          if GetFileVersionInfoW(PWideChar(aFileName), TempHandle, TempSize, TempBuffer) and
              VerQueryValue(TempBuffer, '\', Pointer(TempInfo), TempLen) then
             begin
               Result := TempInfo^.dwFileVersionMS;
               Result := Result shl 32;
               Result := Result or TempInfo^.dwFileVersionLS;
             end;
-        end;
+        end
+       else
+        OutputLastErrorMessage;
     except
       on e : exception do
         if CustomExceptionHandler('GetExtendedFileVersion', e) then raise;
@@ -1176,7 +1292,14 @@ begin
   end;
 end;
 
-function GetStringFileInfo(const aFileName, aField : string; var aValue : string) : boolean;
+procedure OutputLastErrorMessage;
+begin
+  {$IFDEF DEBUG}
+  OutputDebugString({$IFDEF DELPHI12_UP}PWideChar{$ELSE}PAnsiChar{$ENDIF}(SysErrorMessage(GetLastError()) + chr(0)));
+  {$ENDIF}
+end;
+
+function GetStringFileInfo(const aFileName, aField : ustring; var aValue : ustring) : boolean;
 type
   PLangAndCodepage = ^TLangAndCodepage;
   TLangAndCodepage = record
@@ -1188,7 +1311,7 @@ var
   TempBuffer   : pointer;
   TempHandle   : cardinal;
   TempPointer  : pointer;
-  TempSubBlock : string;
+  TempSubBlock : ustring;
   TempLang     : PLangAndCodepage;
   TempArray    : array of TLangAndCodepage;
   i, j : DWORD;
@@ -1200,13 +1323,13 @@ begin
 
   try
     try
-      TempSize := GetFileVersionInfoSize(PChar(aFileName), TempHandle);
+      TempSize := GetFileVersionInfoSizeW(PWideChar(aFileName), TempHandle);
 
       if (TempSize > 0) then
         begin
           GetMem(TempBuffer, TempSize);
 
-          if GetFileVersionInfo(PChar(aFileName), 0, TempSize, TempBuffer) then
+          if GetFileVersionInfoW(PWideChar(aFileName), 0, TempSize, TempBuffer) then
             begin
               if VerQueryValue(TempBuffer, '\VarFileInfo\Translation\', Pointer(TempLang), TempSize) then
                 begin
@@ -1233,7 +1356,7 @@ begin
                                   IntToHex(TempArray[i].wLanguage, 4) + IntToHex(TempArray[i].wCodePage, 4) +
                                   '\' + aField;
 
-                  if VerQueryValue(TempBuffer, PChar(TempSubBlock), TempPointer, TempSize) then
+                  if VerQueryValueW(TempBuffer, PWideChar(TempSubBlock), TempPointer, TempSize) then
                     begin
                       aValue := trim(PChar(TempPointer));
                       Result := (length(aValue) > 0);
@@ -1249,7 +1372,7 @@ begin
                                   IntToHex(TempArray[0].wLanguage, 4) + IntToHex(1252, 4) +
                                   '\' + aField;
 
-                  if VerQueryValue(TempBuffer, PChar(TempSubBlock), TempPointer, TempSize) then
+                  if VerQueryValueW(TempBuffer, PWideChar(TempSubBlock), TempPointer, TempSize) then
                     begin
                       aValue := trim(PChar(TempPointer));
                       Result := (length(aValue) > 0);
@@ -1266,7 +1389,7 @@ begin
   end;
 end;
 
-function GetDLLVersion(const aDLLFile : string; var aVersionInfo : TFileVersionInfo) : boolean;
+function GetDLLVersion(const aDLLFile : ustring; var aVersionInfo : TFileVersionInfo) : boolean;
 var
   TempVersion : uint64;
 begin
@@ -1276,26 +1399,19 @@ begin
     if FileExists(aDLLFile) then
       begin
         TempVersion := GetExtendedFileVersion(aDLLFile);
-        UInt64ToFileVersionInfo(TempVersion, aVersionInfo);
-        Result := True;
+        if (TempVersion <> 0) then
+          begin
+            UInt64ToFileVersionInfo(TempVersion, aVersionInfo);
+            Result := True;
+          end;
       end;
   except
     on e : exception do
       if CustomExceptionHandler('GetDLLVersion', e) then raise;
   end;
 end;      
-{$ENDIF}
 
-function FileVersionInfoToString(const aVersionInfo : TFileVersionInfo) : string;
-begin
-  Result := IntToStr(aVersionInfo.MajorVer) + '.' +
-            IntToStr(aVersionInfo.MinorVer) + '.' +
-            IntToStr(aVersionInfo.Release)  + '.' +
-            IntToStr(aVersionInfo.Build);
-end;
-
-{$IFDEF MSWINDOWS}
-function CheckDLLVersion(const aDLLFile : string; aMajor, aMinor, aRelease, aBuild : uint16) : boolean;
+function CheckDLLVersion(const aDLLFile : ustring; aMajor, aMinor, aRelease, aBuild : uint16) : boolean;
 var
   TempVersionInfo : TFileVersionInfo;
 begin
@@ -1308,7 +1424,7 @@ end;
 
 // This function is based on the answer given by 'Alex' in StackOverflow
 // https://stackoverflow.com/questions/2748474/how-to-determine-if-dll-file-was-compiled-as-x64-or-x86-bit-using-either-delphi
-function GetDLLHeaderMachine(const aDLLFile : string; var aMachine : integer) : boolean;
+function GetDLLHeaderMachine(const aDLLFile : ustring; var aMachine : integer) : boolean;
 var
   TempHeader         : TImageDosHeader;
   TempImageNtHeaders : TImageNtHeaders;
@@ -1349,99 +1465,50 @@ begin
 end;   
 {$ENDIF}
 
-function Is32BitProcess : boolean;
+function FileVersionInfoToString(const aVersionInfo : TFileVersionInfo) : string;
+begin
+  Result := IntToStr(aVersionInfo.MajorVer) + '.' +
+            IntToStr(aVersionInfo.MinorVer) + '.' +
+            IntToStr(aVersionInfo.Release)  + '.' +
+            IntToStr(aVersionInfo.Build);
+end;
+
 {$IFDEF MSWINDOWS}
+function Is32BitProcessRunningIn64BitOS : boolean;
 var
   TempResult : BOOL;
-{$ENDIF}
 begin
-  {$IFDEF CPUX32}
-    Result := True;
-    exit;
-  {$ENDIF}
+  Result := ProcessUnderWow64(GetCurrentProcess, TempResult) and TempResult;
+end;
+{$ENDIF}
 
-  {$IFDEF CPU386}
-    Result := True;
-    exit;
-  {$ENDIF}
-
-  {$IFDEF CPUi386}
-    Result := True;
-    exit;
-  {$ENDIF}
-
-  {$IFDEF CPUPOWERPC32}
-    Result := True;
-    exit;
-  {$ENDIF}
-
-  {$IFDEF CPUSPARC32}
-    Result := True;
-    exit;
-  {$ENDIF}
-
-  {$IFDEF CPU32BITS}
-    Result := True;
-    exit;
-  {$ENDIF}
-
-  {$IFDEF CPUARM32}
-    Result := True;
-    exit;
-  {$ENDIF}
-
-  {$IFDEF WIN32}
-    Result := True;
-    exit;
-  {$ENDIF}
-
-  {$IFDEF IOS32}
-    Result := True;
-    exit;
-  {$ENDIF}
-
-  {$IFDEF MACOS32}
-    Result := True;
-    exit;
-  {$ENDIF}
-
-  {$IFDEF LINUX32}
-    Result := True;
-    exit;
-  {$ENDIF}
-
-  {$IFDEF POSIX32}
-    Result := True;
-    exit;
-  {$ENDIF}
-
-  {$IFDEF ANDROID32}
-    Result := True;
-    exit;
-  {$ENDIF}
-
-  {$IFDEF MSWINDOWS}
-    Result := ProcessUnderWow64(GetCurrentProcess, TempResult) and TempResult;
-    exit;
-  {$ENDIF}
-
-  {$IFDEF DELPHI17_UP}
-    Result := TOSVersion.Architecture in [arIntelX86, arARM32];
+function Is32BitProcess : boolean;
+begin
+  {$IFDEF TARGET_32BITS}
+  Result := True;
   {$ELSE}
-    Result := False;
+    {$IFDEF MSWINDOWS}
+    Result := Is32BitProcessRunningIn64BitOS;
+    {$ELSE}
+      {$IFDEF DELPHI17_UP}
+        Result := TOSVersion.Architecture in [arIntelX86, arARM32];
+      {$ELSE}
+        Result := False;
+      {$ENDIF}
+    {$ENDIF}
   {$ENDIF}
 end;
 
 function CustomPathIsRelative(const aPath : string) : boolean;
 begin
-  {$IFDEF DELPHI12_UP}
-  Result := PathIsRelativeUnicode(PChar(aPath));
-  {$ELSE}
-    {$IFDEF MSWINDOWS}
-    Result := PathIsRelativeAnsi(PChar(aPath));
+  {$IFDEF MSWINDOWS}
+    {$IFDEF DELPHI12_UP}
+    Result := PathIsRelativeUnicode(PChar(aPath));
     {$ELSE}
-    Result := (length(aPath) > 0) and (aPath[1] <> '/');
+    Result := PathIsRelativeAnsi(PChar(aPath));
     {$ENDIF}
+  {$ELSE}
+  Result := (length(aPath) > 0) and (aPath[1] <> '/');
   {$ENDIF}
 end;
 
@@ -1548,7 +1615,7 @@ begin
 
       if Result then
         begin
-          //parts.spec     := CefString(@TempParts.spec);
+          parts.spec     := CefString(@TempParts.spec);
           parts.scheme   := CefString(@TempParts.scheme);
           parts.username := CefString(@TempParts.username);
           parts.password := CefString(@TempParts.password);
@@ -1557,6 +1624,7 @@ begin
           parts.origin   := CefString(@TempParts.origin);
           parts.path     := CefString(@TempParts.path);
           parts.query    := CefString(@TempParts.query);
+          parts.fragment := CefString(@TempParts.fragment);
         end;
     end
    else
@@ -1572,7 +1640,6 @@ begin
 
   if (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
     begin
-      FillChar(TempParts, sizeof(TempParts), 0);
       TempParts.spec     := CefString(parts.spec);
       TempParts.scheme   := CefString(parts.scheme);
       TempParts.username := CefString(parts.username);
@@ -1582,9 +1649,12 @@ begin
       TempParts.origin   := CefString(parts.origin);
       TempParts.path     := CefString(parts.path);
       TempParts.query    := CefString(parts.query);
+      TempParts.fragment := CefString(parts.fragment);
 
-      FillChar(TempURL, SizeOf(TempURL), 0);
-      if cef_create_url(@TempParts, @TempURL) <> 0 then Result := CefString(@TempURL);
+      CefStringInitialize(@TempURL);
+
+      if (cef_create_url(@TempParts, @TempURL) <> 0) then
+        Result := CefStringClearAndGet(@TempURL);
     end;
 end;
 
@@ -1670,45 +1740,17 @@ begin
     Result := '';
 end;
 
-function CefParseJson(const jsonString: ustring; options: TCefJsonParserOptions): ICefValue;
+function CefGetPath(const aPathKey : TCefPathKey) : ustring;
 var
-  TempJSON : TCefString;
+  TempPath : TCefString;
 begin
   if (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
     begin
-      TempJSON := CefString(jsonString);
-      Result   := TCefValueRef.UnWrap(cef_parse_json(@TempJSON, options));
-    end
-   else
-    Result := nil;
-end;
+      CefStringInitialize(@TempPath);
 
-function CefParseJsonAndReturnError(const jsonString   : ustring;
-                                          options      : TCefJsonParserOptions;
-                                    out   errorCodeOut : TCefJsonParserError;
-                                    out   errorMsgOut  : ustring): ICefValue;
-var
-  TempJSON, TempError : TCefString;
-begin
-  if (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
-    begin
-      FillChar(TempError, SizeOf(TempError), 0);
-      TempJSON    := CefString(jsonString);
-      Result      := TCefValueRef.UnWrap(cef_parse_jsonand_return_error(@TempJSON, options, @errorCodeOut, @TempError));
-      errorMsgOut := CefString(@TempError);
+      if (cef_get_path(aPathKey, @TempPath) <> 0) then
+        Result := CefStringClearAndGet(@TempPath);
     end
-   else
-    begin
-      errorCodeOut := JSON_NO_ERROR;
-      Result       := nil;
-      errorMsgOut  := '';
-    end;
-end;
-
-function CefWriteJson(const node: ICefValue; options: TCefJsonWriterOptions): ustring;
-begin
-  if (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
-    Result := CefStringFreeAndGet(cef_write_json(CefGetData(node), options))
    else
     Result := '';
 end;
@@ -1732,9 +1774,9 @@ var
 begin
   if (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
     begin
-      FillChar(TempPath, SizeOf(TempPath), 0);
+      CefStringInitialize(@TempPath);
       Result  := cef_get_temp_directory(@TempPath) <> 0;
-      tempDir := CefString(@TempPath);
+      tempDir := CefStringClearAndGet(@TempPath);
     end
    else
     begin
@@ -1749,10 +1791,10 @@ var
 begin
   if (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
     begin
-      FillChar(TempPath, SizeOf(TempPath), 0);
+      CefStringInitialize(@TempPath);
       TempPref    := CefString(prefix);
       Result      := cef_create_new_temp_directory(@TempPref, @TempPath) <> 0;
-      newTempPath := CefString(@TempPath);
+      newTempPath := CefStringClearAndGet(@TempPath);
     end
    else
     begin
@@ -1767,11 +1809,11 @@ var
 begin
   if (GlobalCEFApp <> nil) and GlobalCEFApp.LibLoaded then
     begin
-      FillChar(TempPath, SizeOf(TempPath), 0);
+      CefStringInitialize(@TempPath);
       TempPref := CefString(prefix);
       TempBase := CefString(baseDir);
       Result   := cef_create_temp_directory_in_directory(@TempBase, @TempPref, @TempPath) <> 0;
-      newDir   := CefString(@TempPath);
+      newDir   := CefStringClearAndGet(@TempPath);
     end
    else
     begin
@@ -1945,6 +1987,34 @@ begin
   end;
 end;
 
+procedure CefCheckAltGrPressed(aWparam : WPARAM; var aEvent : TCefKeyEvent);
+const
+  EITHER_SHIFT_KEY_PRESSED     = $01;
+  EITHER_CONTROL_KEY_PRESSED   = $02;
+  EITHER_ALT_KEY_PRESSED       = $04;
+  EITHER_HANKAKU_KEY_PRESSED   = $08;
+  EITHER_RESERVED1_KEY_PRESSED = $10;
+  EITHER_RESERVED2_KEY_PRESSED = $20;
+var
+  TempKBLayout       : HKL;
+  TempTranslatedChar : SHORT;
+  TempShiftState     : byte;
+begin
+  if (aEvent.kind = KEYEVENT_CHAR) and CefIsKeyDown(VK_RMENU) then
+    begin
+      TempKBLayout       := GetKeyboardLayout(0);
+      TempTranslatedChar := VkKeyScanEx(char(aWparam), TempKBLayout);
+      TempShiftState     := byte(TempTranslatedChar shr 8);
+
+      if ((TempShiftState and EITHER_CONTROL_KEY_PRESSED) <> 0) and
+         ((TempShiftState and EITHER_ALT_KEY_PRESSED)     <> 0) then
+        begin
+          aEvent.modifiers := aEvent.modifiers and not(EVENTFLAG_CONTROL_DOWN or EVENTFLAG_ALT_DOWN);
+          aEvent.modifiers := aEvent.modifiers or EVENTFLAG_ALTGR_DOWN;
+        end;
+    end;
+end;
+
 procedure DropEffectToDragOperation(aEffect: Longint; var aAllowedOps : TCefDragOperations);
 begin
   aAllowedOps := DRAG_OPERATION_NONE;
@@ -1961,7 +2031,112 @@ begin
   if ((aDragOperations and DRAG_OPERATION_COPY) <> 0) then aEffect := aEffect or DROPEFFECT_COPY;
   if ((aDragOperations and DRAG_OPERATION_LINK) <> 0) then aEffect := aEffect or DROPEFFECT_LINK;
   if ((aDragOperations and DRAG_OPERATION_MOVE) <> 0) then aEffect := aEffect or DROPEFFECT_MOVE;
-end;    
+end;
+
+function GetWindowsMajorMinorVersion(var wMajorVersion, wMinorVersion : DWORD) : boolean;
+type
+  TRtlGetVersionFunc = function(var lpVersionInformation : TOSVersionInfoEx): LongInt; stdcall;
+var
+  TempHandle : THandle;
+  TempInfo : TOSVersionInfoEx;
+  TempRtlGetVersionFunc : TRtlGetVersionFunc;
+begin
+  Result        := False;
+  wMajorVersion := 0;
+  wMinorVersion := 0;
+
+  try
+    TempHandle := LoadLibrary(NTDLL);
+
+    if (TempHandle <> 0) then
+      try
+        {$IFDEF FPC}Pointer({$ENDIF}TempRtlGetVersionFunc{$IFDEF FPC}){$ENDIF} := GetProcAddress(TempHandle, 'RtlGetVersion');
+
+        if assigned(TempRtlGetVersionFunc) then
+          begin
+            ZeroMemory(@TempInfo, SizeOf(TOSVersionInfoEx));
+
+            if (TempRtlGetVersionFunc(TempInfo) = 0) then
+              begin
+                Result        := True;
+                wMajorVersion := TempInfo.dwMajorVersion;
+                wMinorVersion := TempInfo.dwMinorVersion;
+              end;
+          end;
+      finally
+        FreeLibrary(TempHandle);
+      end;
+  except
+    on e : exception do
+      if CustomExceptionHandler('GetWindowsMajorMinorVersion', e) then raise;
+  end;
+end;
+
+function GetDefaultCEFUserAgent : string;
+var
+  TempOS, TempChromiumVersion : string;
+  TempMajorVer, TempMinorVer : DWORD;
+  Temp64bit : BOOL;
+begin
+  if GetWindowsMajorMinorVersion(TempMajorVer, TempMinorVer) and
+     (TempMajorVer >= 4) then
+    TempOS := 'Windows NT'
+   else
+    TempOS := 'Windows';
+
+  TempOS := TempOS + ' ' + inttostr(TempMajorVer) + '.' + inttostr(TempMinorVer);
+
+  if ProcessUnderWow64(GetCurrentProcess(), Temp64bit) and Temp64bit then
+    TempOS := TempOS + '; WOW64';
+
+  if (GlobalCEFApp <> nil) then
+    TempChromiumVersion := GlobalCEFApp.ChromeVersion
+   else
+    TempChromiumVersion := inttostr(CEF_CHROMEELF_VERSION_MAJOR)   + '.' +
+                           inttostr(CEF_CHROMEELF_VERSION_MINOR)   + '.' +
+                           inttostr(CEF_CHROMEELF_VERSION_RELEASE) + '.' +
+                           inttostr(CEF_CHROMEELF_VERSION_BUILD);
+
+  Result  := 'Mozilla/5.0' + ' (' + TempOS + ') ' +
+             'AppleWebKit/537.36 (KHTML, like Gecko) ' +
+             'Chrome/' + TempChromiumVersion + ' Safari/537.36';
+end;
+
+{$IFDEF DELPHI14_UP}
+function TouchPointToPoint(aHandle : HWND; const TouchPoint: TTouchInput): TPoint;
+begin
+  Result := Point(TouchPoint.X div 100, TouchPoint.Y div 100);
+  PhysicalToLogicalPoint(aHandle, Result);
+end;
+
+function GetDigitizerStatus(var aDigitizerStatus : TDigitizerStatus; aDPI : cardinal) : boolean;
+var
+  TempStatus : integer;
+begin
+  {$IFDEF DELPHI26_UP}
+  if (aDPI > 0) then
+    TempStatus := GetSystemMetricsForDpi(SM_DIGITIZER, aDPI)
+   else
+  {$ENDIF}
+    TempStatus := GetSystemMetrics(SM_DIGITIZER);
+
+  aDigitizerStatus.IntegratedTouch := ((TempStatus and NID_INTEGRATED_TOUCH) <> 0);
+  aDigitizerStatus.ExternalTouch   := ((TempStatus and NID_EXTERNAL_TOUCH)   <> 0);
+  aDigitizerStatus.IntegratedPen   := ((TempStatus and NID_INTEGRATED_PEN)   <> 0);
+  aDigitizerStatus.ExternalPen     := ((TempStatus and NID_EXTERNAL_PEN)     <> 0);
+  aDigitizerStatus.MultiInput      := ((TempStatus and NID_MULTI_INPUT)      <> 0);
+  aDigitizerStatus.Ready           := ((TempStatus and NID_READY)            <> 0);
+
+  Result := (TempStatus <> 0);
+end;
+
+function HasTouchOrPen(aDPI : cardinal) : boolean;
+var
+  TempStatus : TDigitizerStatus;
+begin
+  Result := GetDigitizerStatus(TempStatus, aDPI);
+end;
+{$ENDIF}
 {$ENDIF}
 
 function DeviceToLogical(aValue : integer; const aDeviceScaleFactor : double) : integer;
@@ -1969,7 +2144,18 @@ begin
   Result := floor(aValue / aDeviceScaleFactor);
 end;
 
+function DeviceToLogical(aValue : single; const aDeviceScaleFactor : double) : single;
+begin
+  Result := aValue / aDeviceScaleFactor;
+end;
+
 procedure DeviceToLogical(var aEvent : TCEFMouseEvent; const aDeviceScaleFactor : double);
+begin
+  aEvent.x := DeviceToLogical(aEvent.x, aDeviceScaleFactor);
+  aEvent.y := DeviceToLogical(aEvent.y, aDeviceScaleFactor);
+end;
+
+procedure DeviceToLogical(var aEvent : TCefTouchEvent; const aDeviceScaleFactor : double);
 begin
   aEvent.x := DeviceToLogical(aEvent.x, aDeviceScaleFactor);
   aEvent.y := DeviceToLogical(aEvent.y, aDeviceScaleFactor);
@@ -2005,7 +2191,11 @@ begin
   Result := GetDeviceCaps(TempDC, LOGPIXELSX);
   ReleaseDC(0, TempDC);
   {$ELSE}
-  Result := screen.PrimaryMonitor.PixelsPerInch;
+    {$IFDEF MACOS}
+    Result := trunc(MainScreen.backingScaleFactor);
+    {$ELSE}
+    Result := screen.PrimaryMonitor.PixelsPerInch;
+    {$ENDIF}
   {$ENDIF}
 end;
 
@@ -2141,6 +2331,24 @@ begin
   if (length(aCharset) > 0) then Result := Result + ';charset=' + aCharset;
 
   Result := Result + ';base64,' + CefURIEncode(CefBase64Encode(aData, aSize), false);
+end;
+
+function ValidCefWindowHandle(aHandle : TCefWindowHandle) : boolean;
+begin
+  {$IFDEF MACOS}
+  Result := (aHandle <> nil);
+  {$ELSE}
+  Result := (aHandle <> 0);
+  {$ENDIF}
+end;
+
+procedure InitializeWindowHandle(var aHandle : TCefWindowHandle);
+begin
+  {$IFDEF MACOS}
+  aHandle := nil;
+  {$ELSE}
+  aHandle := 0;
+  {$ENDIF}
 end;
 
 end.

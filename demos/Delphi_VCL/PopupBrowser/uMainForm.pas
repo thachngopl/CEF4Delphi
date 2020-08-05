@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -50,7 +50,7 @@ uses
   Controls, Forms, Dialogs, StdCtrls, ExtCtrls, SyncObjs,
   {$ENDIF}
   uCEFChromium, uCEFWindowParent, uCEFInterfaces, uCEFConstants, uCEFTypes, uChildForm,
-  Vcl.AppEvnts, uCEFWinControl, uCEFSentinel;
+  Vcl.AppEvnts, uCEFWinControl, uCEFSentinel, uCEFChromiumCore;
 
 const
   CEF_CREATENEXTCHILD  = WM_APP + $A50;
@@ -65,7 +65,6 @@ type
     Chromium1: TChromium;
     CEFWindowParent1: TCEFWindowParent;
     AppEvents: TApplicationEvents;
-    CEFSentinel1: TCEFSentinel;
 
     procedure GoBtnClick(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
@@ -80,7 +79,6 @@ type
     procedure Chromium1BeforePopup(Sender: TObject; const browser: ICefBrowser; const frame: ICefFrame; const targetUrl, targetFrameName: ustring; targetDisposition: TCefWindowOpenDisposition; userGesture: Boolean; const popupFeatures: TCefPopupFeatures; var windowInfo: TCefWindowInfo; var client: ICefClient; var settings: TCefBrowserSettings; var extra_info: ICefDictionaryValue; var noJavascriptAccess: Boolean; var Result: Boolean);
     procedure Chromium1Close(Sender: TObject; const browser: ICefBrowser; var aAction: TCefCloseBrowserAction);
     procedure Chromium1BeforeClose(Sender: TObject; const browser: ICefBrowser);
-    procedure CEFSentinel1Close(Sender: TObject);
 
   protected
     FChildForm       : TChildForm;
@@ -144,8 +142,7 @@ uses
 // 1. FormCloseQuery sets CanClose to FALSE and it closes all child forms.
 // 2. When all the child forms are closed then FormCloseQuery is triggered again, sets CanClose to FALSE calls TChromium.CloseBrowser which triggers the TChromium.OnClose event.
 // 3. TChromium.OnClose sends a CEFBROWSER_DESTROY message to destroy CEFWindowParent1 in the main thread, which triggers the TChromium.OnBeforeClose event.
-// 4. TChromium.OnBeforeClose calls TCEFSentinel.Start, which will trigger TCEFSentinel.OnClose when the renderer processes are closed.
-// 5. TCEFSentinel.OnClose sets FCanClose := True and sends WM_CLOSE to the form.
+// 4. TChromium.OnBeforeClose sets FCanClose := True and sends WM_CLOSE to the form.
 
 procedure CreateGlobalCEFApp;
 begin
@@ -154,6 +151,13 @@ begin
   GlobalCEFApp.EnableHighDPISupport       := True;
   //GlobalCEFApp.LogFile                    := 'debug.log';
   //GlobalCEFApp.LogSeverity                := LOGSEVERITY_INFO;
+  {
+  GlobalCEFApp.FrameworkDirPath     := 'c:\cef';
+  GlobalCEFApp.ResourcesDirPath     := 'c:\cef';
+  GlobalCEFApp.LocalesDirPath       := 'c:\cef\locales';
+  GlobalCEFApp.cache                := 'c:\cef\cache';
+  GlobalCEFApp.UserDataPath         := 'c:\cef\User Data';
+  }
 end;
 
 procedure TMainForm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
@@ -212,7 +216,7 @@ begin
   PostMessage(Handle, CEF_AFTERCREATED, 0, 0);
 end;
 
-procedure TMainForm.Chromium1BeforePopup(Sender : TObject;
+procedure TMainForm.Chromium1BeforePopup(      Sender             : TObject;
                                          const browser            : ICefBrowser;
                                          const frame              : ICefFrame;
                                          const targetUrl          : ustring;
@@ -246,7 +250,8 @@ end;
 
 procedure TMainForm.Chromium1BeforeClose(Sender: TObject; const browser: ICefBrowser);
 begin
-  CEFSentinel1.Start;
+  FCanClose := True;
+  PostMessage(Handle, WM_CLOSE, 0, 0);
 end;
 
 function TMainForm.CreateClientHandler(var   windowInfo      : TCefWindowInfo;
@@ -342,22 +347,12 @@ begin
     FCriticalSection.Acquire;
 
     if (FChildForm <> nil) then
-      begin
-        //FChildForm.ApplyPopupFeatures;
-        //FChildForm.Show;
-        PostMessage(FChildForm.Handle, CEF_SHOWCHILD, 0, 0);
-      end;
+      PostMessage(FChildForm.Handle, CEF_SHOWCHILD, 0, 0);
 
     FChildForm := TChildForm.Create(self);
   finally
     FCriticalSection.Release;
   end;
-end;
-
-procedure TMainForm.CEFSentinel1Close(Sender: TObject);
-begin
-  FCanClose := True;
-  PostMessage(Handle, WM_CLOSE, 0, 0);
 end;
 
 procedure TMainForm.ChildDestroyedMsg(var aMessage : TMessage);

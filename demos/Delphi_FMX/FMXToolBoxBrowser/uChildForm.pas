@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -45,7 +45,8 @@ uses
   {$ENDIF}
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs,
-  uCEFFMXChromium, uCEFFMXWindowParent, uCEFInterfaces, uCEFConstants, uCEFTypes;
+  uCEFFMXChromium, uCEFFMXWindowParent, uCEFInterfaces, uCEFConstants, uCEFTypes,
+  uCEFChromiumCore;
 
 type
   TChildForm = class(TForm)
@@ -69,16 +70,34 @@ type
     FMXWindowParent : TFMXWindowParent;
     FHomepage       : string;
 
+    {$IFDEF MSWINDOWS}
+    // This is a workaround for the issue #253
+    // https://github.com/salvadordf/CEF4Delphi/issues/253
+    FCustomWindowState      : TWindowState;
+    FOldWndPrc              : TFNWndProc;
+    FFormStub               : Pointer;
+    {$ENDIF}
+
     function  GetBrowserID : integer;
 
     procedure ResizeChild;
     procedure CreateFMXWindowParent;
-    function  PostCustomMessage(aMessage : cardinal; wParam : cardinal = 0; lParam : integer = 0) : boolean;
+    function  GetFMXWindowParentRect : System.Types.TRect;
+    function  PostCustomMessage(aMsg : cardinal; aWParam : WPARAM = 0; aLParam : LPARAM = 0) : boolean;
+    procedure NotifyMoveOrResizeStarted;
+
+    {$IFDEF MSWINDOWS}
+    function  GetCurrentWindowState : TWindowState;
+    procedure UpdateCustomWindowState;
+    procedure CreateHandle; override;
+    procedure DestroyHandle; override;
+    procedure CustomWndProc(var aMessage: TMessage);
+    {$ENDIF}
 
   public
-    procedure NotifyMoveOrResizeStarted;
-    procedure DoDestroyParent;
     procedure SendCloseMsg;
+    procedure SendShowBrowserMsg;
+    procedure SetBounds(ALeft: Integer; ATop: Integer; AWidth: Integer; AHeight: Integer); override;
 
     property Closing   : boolean    read FClosing;
     property Homepage  : string     read FHomepage     write FHomepage;
@@ -91,7 +110,7 @@ implementation
 
 uses
   FMX.Platform, FMX.Platform.Win,
-  uCEFMiscFunctions, uCEFApplication, uFMXApplicationService, uMainForm;
+  uCEFMiscFunctions, uCEFApplication, uMainForm;
 
 // Child destruction steps
 // =======================
@@ -100,7 +119,7 @@ uses
 // 3. TFMXChromium.OnBeforeClose sets FCanClose := True and sends WM_CLOSE to the form.
 
 
-function TChildForm.PostCustomMessage(aMessage, wParam : cardinal; lParam : integer) : boolean;
+function TChildForm.PostCustomMessage(aMsg : cardinal; aWParam : WPARAM; aLParam : LPARAM) : boolean;
 {$IFDEF MSWINDOWS}
 var
   TempHWND : HWND;
@@ -112,10 +131,122 @@ begin
   if (Handle <> nil) then
     begin
       TempHWND := FmxHandleToHWND(Handle);
-      Result   := (TempHWND <> 0) and WinApi.Windows.PostMessage(TempHWND, aMessage, wParam, lParam);
+      Result   := (TempHWND <> 0) and WinApi.Windows.PostMessage(TempHWND, aMsg, aWParam, aLParam);
     end;
   {$ENDIF}
 end;
+
+{$IFDEF MSWINDOWS}
+procedure TChildForm.CreateHandle;
+begin
+  inherited CreateHandle;
+
+  FFormStub  := MakeObjectInstance(CustomWndProc);
+  FOldWndPrc := TFNWndProc(SetWindowLongPtr(FmxHandleToHWND(Handle), GWLP_WNDPROC, NativeInt(FFormStub)));
+end;
+
+procedure TChildForm.DestroyHandle;
+begin
+  SetWindowLongPtr(FmxHandleToHWND(Handle), GWLP_WNDPROC, NativeInt(FOldWndPrc));
+  FreeObjectInstance(FFormStub);
+
+  inherited DestroyHandle;
+end;
+
+procedure TChildForm.CustomWndProc(var aMessage: TMessage);
+const
+  SWP_STATECHANGED = $8000;  // Undocumented
+var
+  TempWindowPos : PWindowPos;
+begin
+  try
+    case aMessage.Msg of
+      WM_ENTERMENULOOP :
+        if (aMessage.wParam = 0) and
+           (GlobalCEFApp <> nil) then
+          GlobalCEFApp.OsmodalLoop := True;
+
+      WM_EXITMENULOOP :
+        if (aMessage.wParam = 0) and
+           (GlobalCEFApp <> nil) then
+          GlobalCEFApp.OsmodalLoop := False;
+
+      WM_MOVE,
+      WM_MOVING : NotifyMoveOrResizeStarted;
+
+      WM_SIZE :
+        if (aMessage.wParam = SIZE_RESTORED) then
+          UpdateCustomWindowState;
+
+      WM_WINDOWPOSCHANGING :
+        begin
+          TempWindowPos := TWMWindowPosChanging(aMessage).WindowPos;
+          if ((TempWindowPos.Flags and SWP_STATECHANGED) <> 0) then
+            UpdateCustomWindowState;
+        end;
+
+      WM_SHOWWINDOW :
+        if (aMessage.wParam <> 0) and (aMessage.lParam = SW_PARENTOPENING) then
+          PostCustomMessage(CEF_SHOWBROWSER);
+
+      CEF_DESTROY :
+        if (FMXWindowParent <> nil) then
+          FreeAndNil(FMXWindowParent);
+
+      CEF_SHOWBROWSER :
+        if (FMXWindowParent <> nil) then
+          begin
+            FMXWindowParent.WindowState := TWindowState.wsNormal;
+            FMXWindowParent.Show;
+            FMXWindowParent.SetBounds(GetFMXWindowParentRect);
+          end;
+    end;
+
+    aMessage.Result := CallWindowProc(FOldWndPrc, FmxHandleToHWND(Handle), aMessage.Msg, aMessage.wParam, aMessage.lParam);
+  except
+    on e : exception do
+      if CustomExceptionHandler('TChildForm.CustomWndProc', e) then raise;
+  end;
+end;
+
+procedure TChildForm.UpdateCustomWindowState;
+var
+  TempNewState : TWindowState;
+begin
+  TempNewState := GetCurrentWindowState;
+
+  if (FCustomWindowState <> TempNewState) then
+    begin
+      // This is a workaround for the issue #253
+      // https://github.com/salvadordf/CEF4Delphi/issues/253
+      if (FCustomWindowState = TWindowState.wsMinimized) then
+        SendShowBrowserMsg;
+
+      FCustomWindowState := TempNewState;
+    end;
+end;
+
+function TChildForm.GetCurrentWindowState : TWindowState;
+var
+  TempPlacement : TWindowPlacement;
+  TempHWND      : HWND;
+begin
+  // TForm.WindowState is not updated correctly in FMX forms.
+  // We have to call the GetWindowPlacement function in order to read the window state correctly.
+
+  Result   := TWindowState.wsNormal;
+  TempHWND := FmxHandleToHWND(Handle);
+
+  ZeroMemory(@TempPlacement, SizeOf(TWindowPlacement));
+  TempPlacement.Length := SizeOf(TWindowPlacement);
+
+  if GetWindowPlacement(TempHWND, @TempPlacement) then
+    case TempPlacement.showCmd of
+      SW_SHOWMAXIMIZED : Result := TWindowState.wsMaximized;
+      SW_SHOWMINIMIZED : Result := TWindowState.wsMinimized;
+    end;
+end;
+{$ENDIF}
 
 function TChildForm.GetBrowserID : integer;
 begin
@@ -133,16 +264,27 @@ begin
     end;
 end;
 
+function TChildForm.GetFMXWindowParentRect : System.Types.TRect;
+var
+  TempScale : single;
+begin
+  TempScale     := FMXChromium1.ScreenScale;
+  Result.Left   := 0;
+  Result.Top    := 0;
+  Result.Right  := round(ClientWidth  * TempScale) - 1;
+  Result.Bottom := round(ClientHeight * TempScale) - 1;
+end;
+
 procedure TChildForm.ResizeChild;
 begin
   if (FMXWindowParent <> nil) then
-    FMXWindowParent.SetBounds(0, 0, ClientWidth - 1, ClientHeight -  1);
+    FMXWindowParent.SetBounds(GetFMXWindowParentRect);
 end;
 
 procedure TChildForm.FMXChromium1BeforeClose(Sender: TObject; const browser: ICefBrowser);
 begin
   FCanClose := True;
-  PostCustomMessage(WM_CLOSE);
+  SendCloseMsg;
 end;
 
 procedure TChildForm.FMXChromium1BeforePopup(Sender: TObject;
@@ -185,6 +327,10 @@ begin
   FClosing        := False;
   FMXWindowParent := nil;
   FHomepage       := '';
+
+  {$IFDEF MSWINDOWS}
+  FCustomWindowState := WindowState;
+  {$ENDIF}
 end;
 
 procedure TChildForm.FormDestroy(Sender: TObject);
@@ -227,21 +373,30 @@ begin
     end;
 end;
 
+procedure TChildForm.SetBounds(ALeft, ATop, AWidth, AHeight: Integer);
+var
+  PositionChanged: Boolean;
+begin
+  PositionChanged := (ALeft <> Left) or (ATop <> Top);
+  inherited SetBounds(ALeft, ATop, AWidth, AHeight);
+  if PositionChanged then
+    NotifyMoveOrResizeStarted;
+end;
+
 procedure TChildForm.NotifyMoveOrResizeStarted;
 begin
   // This is needed to display some HTML elements correctly
   if (FMXChromium1 <> nil) then FMXChromium1.NotifyMoveOrResizeStarted;
 end;
 
-procedure TChildForm.DoDestroyParent;
-begin
-  // We destroy FMXWindowParent safely in the main thread and this will trigger the TFMXChromium.OnBeforeClose event.
-  if (FMXWindowParent <> nil) then FreeAndNil(FMXWindowParent);
-end;
-
 procedure TChildForm.SendCloseMsg;
 begin
   PostCustomMessage(WM_CLOSE);
+end;
+
+procedure TChildForm.SendShowBrowserMsg;
+begin
+  PostCustomMessage(CEF_SHOWBROWSER);
 end;
 
 end.

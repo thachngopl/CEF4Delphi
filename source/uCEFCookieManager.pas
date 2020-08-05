@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -65,11 +65,11 @@ type
       function  VisitAllCookiesProc(const visitor: TCefCookieVisitorProc): Boolean;
       function  VisitUrlCookies(const url: ustring; includeHttpOnly: Boolean; const visitor: ICefCookieVisitor): Boolean;
       function  VisitUrlCookiesProc(const url: ustring; includeHttpOnly: Boolean; const visitor: TCefCookieVisitorProc): Boolean;
-      function  SetCookie(const url, name, value, domain, path: ustring; secure, httponly, hasExpires: Boolean; const creation, lastAccess, expires: TDateTime; const callback: ICefSetCookieCallback): Boolean;
-      function  SetCookieProc(const url: ustring; const name, value, domain, path: ustring; secure, httponly, hasExpires: Boolean; const creation, lastAccess, expires: TDateTime; const callback: TCefSetCookieCallbackProc): Boolean;
+      function  SetCookie(const url, name, value, domain, path: ustring; secure, httponly, hasExpires: Boolean; const creation, lastAccess, expires: TDateTime; same_site : TCefCookieSameSite; priority : TCefCookiePriority; const callback: ICefSetCookieCallback): Boolean;
+      function  SetCookieProc(const url: ustring; const name, value, domain, path: ustring; secure, httponly, hasExpires: Boolean; const creation, lastAccess, expires: TDateTime; same_site : TCefCookieSameSite; priority : TCefCookiePriority; const callback: TCefSetCookieCallbackProc): Boolean;
       function  DeleteCookies(const url, cookieName: ustring; const callback: ICefDeleteCookiesCallback): Boolean;
       function  DeleteCookiesProc(const url, cookieName: ustring; const callback: TCefDeleteCookiesCallbackProc): Boolean;
-      function  FlushStore(const handler: ICefCompletionCallback): Boolean;
+      function  FlushStore(const callback: ICefCompletionCallback): Boolean;
       function  FlushStoreProc(const proc: TCefCompletionCallbackProc): Boolean;
 
     public
@@ -108,9 +108,9 @@ begin
   Result := DeleteCookies(url, cookieName, TCefFastDeleteCookiesCallback.Create(callback));
 end;
 
-function TCefCookieManagerRef.FlushStore(const handler: ICefCompletionCallback): Boolean;
+function TCefCookieManagerRef.FlushStore(const callback: ICefCompletionCallback): Boolean;
 begin
-  Result := PCefCookieManager(FData)^.flush_store(PCefCookieManager(FData), CefGetData(handler)) <> 0;
+  Result := PCefCookieManager(FData)^.flush_store(PCefCookieManager(FData), CefGetData(callback)) <> 0;
 end;
 
 function TCefCookieManagerRef.FlushStoreProc(const proc: TCefCompletionCallbackProc): Boolean;
@@ -131,51 +131,67 @@ end;
 function TCefCookieManagerRef.SetCookie(const url, name, value, domain, path: ustring;
                                               secure, httponly, hasExpires: Boolean;
                                         const creation, lastAccess, expires: TDateTime;
+                                              same_site : TCefCookieSameSite;
+                                              priority : TCefCookiePriority;
                                         const callback: ICefSetCookieCallback): Boolean;
 var
-  str  : TCefString;
-  cook : TCefCookie;
+  TempURL    : TCefString;
+  TempCookie : TCefCookie;
 begin
-  str              := CefString(url);
-  cook.name        := CefString(name);
-  cook.value       := CefString(value);
-  cook.domain      := CefString(domain);
-  cook.path        := CefString(path);
-  cook.secure      := Ord(secure);
-  cook.httponly    := Ord(httponly);
-  cook.creation    := DateTimeToCefTime(creation);
-  cook.last_access := DateTimeToCefTime(lastAccess);
-  cook.has_expires := Ord(hasExpires);
+  TempURL                := CefString(url);
+  TempCookie.name        := CefString(name);
+  TempCookie.value       := CefString(value);
+  TempCookie.domain      := CefString(domain);
+  TempCookie.path        := CefString(path);
+  TempCookie.secure      := Ord(secure);
+  TempCookie.httponly    := Ord(httponly);
+  TempCookie.creation    := DateTimeToCefTime(creation);
+  TempCookie.last_access := DateTimeToCefTime(lastAccess);
+  TempCookie.has_expires := Ord(hasExpires);
+  TempCookie.same_site   := same_site;
+  TempCookie.priority    := priority;
 
   if hasExpires then
-    cook.expires := DateTimeToCefTime(expires)
+    TempCookie.expires := DateTimeToCefTime(expires)
    else
-    FillChar(cook.expires, SizeOf(TCefTime), 0);
+    FillChar(TempCookie.expires, SizeOf(TCefTime), 0);
 
-  Result := PCefCookieManager(FData)^.set_cookie(PCefCookieManager(FData), @str, @cook, CefGetData(callback)) <> 0;
+  Result := PCefCookieManager(FData)^.set_cookie(PCefCookieManager(FData), @TempURL, @TempCookie, CefGetData(callback)) <> 0;
 end;
 
 function TCefCookieManagerRef.SetCookieProc(const url, name, value, domain, path: ustring;
                                                   secure, httponly, hasExpires: Boolean;
                                             const creation, lastAccess, expires: TDateTime;
+                                                  same_site : TCefCookieSameSite;
+                                                  priority : TCefCookiePriority;
                                             const callback: TCefSetCookieCallbackProc): Boolean;
 begin
   Result := SetCookie(url, name, value, domain, path,
                       secure, httponly, hasExpires,
                       creation, lastAccess, expires,
+                      same_site, priority,
                       TCefFastSetCookieCallback.Create(callback));
 end;
 
-procedure TCefCookieManagerRef.SetSupportedSchemes(const schemes: TStrings; include_defaults: boolean; const callback: ICefCompletionCallback);
+procedure TCefCookieManagerRef.SetSupportedSchemes(const schemes          : TStrings;
+                                                         include_defaults : boolean;
+                                                   const callback         : ICefCompletionCallback);
 var
-  TempSL : ICefStringList;
+  TempSL     : ICefStringList;
+  TempHandle : TCefStringList;
 begin
   try
-    TempSL := TCefStringListOwn.Create;
-    TempSL.AddStrings(schemes);
+    if (schemes <> nil) and (schemes.count > 0) then
+      begin
+        TempSL := TCefStringListOwn.Create;
+        TempSL.AddStrings(schemes);
+        TempHandle := TempSL.Handle;
+      end
+     else
+      TempHandle := nil;
 
     PCefCookieManager(FData)^.set_supported_schemes(PCefCookieManager(FData),
-                                                    TempSL.Handle,
+                                                    TempHandle,
                                                     ord(include_defaults),
                                                     CefGetData(callback));
   finally
@@ -183,7 +199,9 @@ begin
   end;
 end;
 
-procedure TCefCookieManagerRef.SetSupportedSchemesProc(const schemes: TStrings; include_defaults: boolean; const callback: TCefCompletionCallbackProc);
+procedure TCefCookieManagerRef.SetSupportedSchemesProc(const schemes          : TStrings;
+                                                             include_defaults : boolean;
+                                                       const callback         : TCefCompletionCallbackProc);
 begin
   SetSupportedSchemes(schemes, include_defaults, TCefFastCompletionCallback.Create(callback));
 end;

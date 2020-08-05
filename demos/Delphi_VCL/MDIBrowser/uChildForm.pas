@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -51,7 +51,7 @@ uses
   Controls, Forms, Dialogs, StdCtrls, ExtCtrls, Types, ComCtrls, ClipBrd,
   {$ENDIF}
   uMainForm, uCEFChromium, uCEFWindowParent, uCEFInterfaces, uCEFConstants, uCEFTypes,
-  uCEFWinControl;
+  uCEFWinControl, uCEFChromiumCore;
 
 type
   TChildForm = class(TForm)
@@ -230,6 +230,7 @@ begin
     Chromium1.ProxyPassword := '';
     }
 
+    Chromium1.DefaultURL := Edit1.Text;
     Chromium1.CreateBrowser(CEFWindowParent1, '', TempContext);
   finally
     TempContext := nil;
@@ -268,7 +269,6 @@ procedure TChildForm.BrowserCreatedMsg(var aMessage : TMessage);
 begin
   CEFWindowParent1.UpdateSize;
   Panel1.Enabled := True;
-  Button1.Click;
 end;
 
 procedure TChildForm.BrowserDestroyMsg(var aMessage : TMessage);

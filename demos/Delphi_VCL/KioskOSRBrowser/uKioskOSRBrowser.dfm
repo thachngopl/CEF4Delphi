@@ -27,6 +27,10 @@ object Form1: TForm1
     Top = 0
     Width = 1004
     Height = 526
+    OnCustomTouch = Panel1CustomTouch
+    OnPointerDown = Panel1PointerDown
+    OnPointerUp = Panel1PointerUp
+    OnPointerUpdate = Panel1PointerUpdate
     Align = alClient
     Caption = 'Panel1'
     TabOrder = 0
@@ -65,24 +69,19 @@ object Form1: TForm1
     OnPaint = chrmosrPaint
     OnCursorChange = chrmosrCursorChange
     OnVirtualKeyboardRequested = chrmosrVirtualKeyboardRequested
-    Left = 24
-    Top = 56
+    Left = 40
+    Top = 40
   end
   object AppEvents: TApplicationEvents
     OnMessage = AppEventsMessage
-    Left = 24
-    Top = 128
+    Left = 40
+    Top = 112
   end
   object Timer1: TTimer
     Enabled = False
     Interval = 300
     OnTimer = Timer1Timer
-    Left = 24
-    Top = 206
-  end
-  object CEFSentinel1: TCEFSentinel
-    OnClose = CEFSentinel1Close
-    Left = 24
-    Top = 280
+    Left = 40
+    Top = 182
   end
 end

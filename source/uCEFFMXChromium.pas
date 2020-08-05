@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -49,15 +49,18 @@ uses
   {$IFDEF MSWINDOWS}
   WinApi.Windows, WinApi.Messages, FMX.Platform.Win,
   {$ENDIF}
-  FMX.Types, FMX.Platform, FMX.Forms, FMX.Controls,
+  FMX.Types, FMX.Platform, FMX.Forms, FMX.Controls, FMX.Graphics,
   uCEFTypes, uCEFInterfaces, uCEFChromiumCore;
 
 type
   {$IFNDEF FPC}{$IFDEF DELPHI16_UP}[ComponentPlatformsAttribute(pidWin32 or pidWin64)]{$ENDIF}{$ENDIF}
   TFMXChromium = class(TChromiumCore, IChromiumEvents)
     protected
+      function  GetParentFormHandle : TCefWindowHandle; override;
       function  GetParentForm : TCustomForm;
+      function  GetScreenScale : Single;
       procedure InitializeDevToolsWindowInfo; virtual;
+
     public
       procedure ShowDevTools(inspectElementAt: TPoint);
       procedure CloseDevTools;
@@ -70,6 +73,10 @@ type
       procedure SetFormTopTo(const y : Integer);
 
       function  CreateBrowser(const aWindowName : ustring = ''; const aContext : ICefRequestContext = nil; const aExtraInfo : ICefDictionaryValue = nil) : boolean; overload; virtual;
+      function  SaveAsBitmapStream(var aStream : TStream; const aRect : System.Types.TRect) : boolean;
+      function  TakeSnapshot(var aBitmap : TBitmap; const aRect : System.Types.TRect) : boolean;
+
+      property  ScreenScale    : single             read GetScreenScale;
   end;
 
 // *********************************************************
@@ -102,7 +109,9 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Math;
+  {$IFDEF MSWINDOWS}FMX.Helpers.Win,{$ENDIF}
+  System.SysUtils, System.Math,
+  uCEFApplicationCore;
 
 function TFMXChromium.CreateBrowser(const aWindowName  : ustring;
                                     const aContext     : ICefRequestContext;
@@ -145,6 +154,45 @@ begin
       end
      else
       TempComp := TempComp.owner;
+end;
+
+function TFMXChromium.GetScreenScale : Single;
+{$IFDEF MSWINDOWS}
+var
+  TempHandle : TCefWindowHandle;
+{$ENDIF}
+begin
+  {$IFDEF MSWINDOWS}
+  TempHandle := GetParentFormHandle;
+
+  if (TempHandle <> 0) then
+    Result := GetWndScale(TempHandle)
+   else
+  {$ENDIF}
+    if (GlobalCEFApp <> nil) then
+      Result := GlobalCEFApp.DeviceScaleFactor
+     else
+      Result := 1;
+end;
+
+function TFMXChromium.GetParentFormHandle : TCefWindowHandle;
+{$IFDEF MSWINDOWS}
+var
+  TempForm : TCustomForm;
+{$ENDIF}
+begin
+  Result := inherited GetParentFormHandle;
+
+  {$IFDEF MSWINDOWS}
+  TempForm := GetParentForm;
+
+  if (TempForm <> nil)  then
+    Result := FmxHandleToHWND(TempForm.Handle)
+   else
+    if (Application          <> nil) and
+       (Application.MainForm <> nil) then
+      Result := FmxHandleToHWND(Application.MainForm.Handle);
+  {$ENDIF}
 end;
 
 procedure TFMXChromium.MoveFormTo(const x, y: Integer);
@@ -249,6 +297,54 @@ begin
     {$ELSE}
     TempForm.Top := y;
     {$ENDIF}
+end;
+
+function TFMXChromium.SaveAsBitmapStream(var aStream : TStream; const aRect : System.Types.TRect) : boolean;
+{$IFDEF MSWINDOWS}
+var
+  TempDC   : HDC;
+  TempRect : System.Types.TRect;
+{$ENDIF}
+begin
+  Result := False;
+
+  {$IFDEF MSWINDOWS}
+  if not(FIsOSR) and (FRenderCompHWND <> 0) and (aStream <> nil) then
+    begin
+      TempDC := GetDC(FRenderCompHWND);
+
+      if (TempDC <> 0) then
+        try
+          TempRect := aRect;
+          Result   := OffsetRect(TempRect, - TempRect.Left, - TempRect.Top) and
+                      CopyDCToBitmapStream(TempDC, TempRect, aStream);
+        finally
+          ReleaseDC(FRenderCompHWND, TempDC);
+        end;
+    end;
+  {$ENDIF}
+end;
+
+function TFMXChromium.TakeSnapshot(var aBitmap : TBitmap; const aRect : System.Types.TRect) : boolean;
+var
+  TempStream : TMemoryStream;
+begin
+  Result     := False;
+  TempStream := nil;
+
+  if FIsOSR or (aBitmap = nil) then exit;
+
+  try
+    TempStream := TMemoryStream.Create;
+
+    if SaveAsBitmapStream(TStream(TempStream), aRect) then
+      begin
+        aBitmap.LoadFromStream(TempStream);
+        Result := True;
+      end;
+  finally
+    FreeAndNil(TempStream);
+  end;
 end;
 
 end.

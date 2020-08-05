@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -50,7 +50,7 @@ uses
   Controls, Forms, Dialogs, StdCtrls, ExtCtrls, ComCtrls,
   {$ENDIF}
   uCEFChromium, uCEFWindowParent, uCEFInterfaces, uCEFApplication, uCEFTypes, uCEFConstants,
-  uCEFWinControl, uCEFSentinel;
+  uCEFWinControl, uCEFSentinel, uCEFChromiumCore;
 
 const
   MINIBROWSER_SHOWTEXTVIEWER = WM_APP + $100;
@@ -58,6 +58,7 @@ const
   MINIBROWSER_CONTEXTMENU_SETJSEVENT   = MENU_ID_USER_FIRST + 1;
   MINIBROWSER_CONTEXTMENU_JSVISITDOM   = MENU_ID_USER_FIRST + 2;
   MINIBROWSER_CONTEXTMENU_SHOWDEVTOOLS = MENU_ID_USER_FIRST + 3;
+  MINIBROWSER_CONTEXTMENU_OFFLINE      = MENU_ID_USER_FIRST + 4;
 
   MOUSEOVER_MESSAGE_NAME  = 'mouseover';
   CUSTOMNAME_MESSAGE_NAME = 'customname';
@@ -71,41 +72,29 @@ type
     CEFWindowParent1: TCEFWindowParent;
     Chromium1: TChromium;
     Timer1: TTimer;
-    CEFSentinel1: TCEFSentinel;
+
     procedure FormShow(Sender: TObject);
-    procedure GoBtnClick(Sender: TObject);
-    procedure Chromium1BeforeContextMenu(Sender: TObject;
-      const browser: ICefBrowser; const frame: ICefFrame;
-      const params: ICefContextMenuParams; const model: ICefMenuModel);
-    procedure Chromium1ContextMenuCommand(Sender: TObject;
-      const browser: ICefBrowser; const frame: ICefFrame;
-      const params: ICefContextMenuParams; commandId: Integer;
-      eventFlags: Cardinal; out Result: Boolean);
-    procedure Chromium1ProcessMessageReceived(Sender: TObject;
-      const browser: ICefBrowser; const frame: ICefFrame; sourceProcess: TCefProcessId;
-      const message: ICefProcessMessage; out Result: Boolean);
-    procedure Chromium1AfterCreated(Sender: TObject; const browser: ICefBrowser);
-    procedure Timer1Timer(Sender: TObject);
-    procedure Chromium1BeforePopup(Sender: TObject;
-      const browser: ICefBrowser; const frame: ICefFrame; const targetUrl,
-      targetFrameName: ustring;
-      targetDisposition: TCefWindowOpenDisposition; userGesture: Boolean;
-      const popupFeatures: TCefPopupFeatures; var windowInfo: TCefWindowInfo;
-      var client: ICefClient; var settings: TCefBrowserSettings;
-      var extra_info: ICefDictionaryValue;
-      var noJavascriptAccess: Boolean; var Result: Boolean);
     procedure FormCreate(Sender: TObject);
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
-    procedure Chromium1Close(Sender: TObject; const browser: ICefBrowser;
-      var aAction : TCefCloseBrowserAction);
-    procedure Chromium1BeforeClose(Sender: TObject;
-      const browser: ICefBrowser);
-    procedure CEFSentinel1Close(Sender: TObject);
+
+    procedure Timer1Timer(Sender: TObject);
+    procedure GoBtnClick(Sender: TObject);
+
+    procedure Chromium1BeforeContextMenu(Sender: TObject; const browser: ICefBrowser; const frame: ICefFrame; const params: ICefContextMenuParams; const model: ICefMenuModel);
+    procedure Chromium1ContextMenuCommand(Sender: TObject; const browser: ICefBrowser; const frame: ICefFrame; const params: ICefContextMenuParams; commandId: Integer; eventFlags: Cardinal; out Result: Boolean);
+    procedure Chromium1ProcessMessageReceived(Sender: TObject; const browser: ICefBrowser; const frame: ICefFrame; sourceProcess: TCefProcessId; const message: ICefProcessMessage; out Result: Boolean);
+    procedure Chromium1AfterCreated(Sender: TObject; const browser: ICefBrowser);
+    procedure Chromium1BeforePopup(Sender: TObject; const browser: ICefBrowser; const frame: ICefFrame; const targetUrl, targetFrameName: ustring; targetDisposition: TCefWindowOpenDisposition; userGesture: Boolean; const popupFeatures: TCefPopupFeatures; var windowInfo: TCefWindowInfo; var client: ICefClient; var settings: TCefBrowserSettings; var extra_info: ICefDictionaryValue; var noJavascriptAccess: Boolean; var Result: Boolean);
+    procedure Chromium1Close(Sender: TObject; const browser: ICefBrowser; var aAction : TCefCloseBrowserAction);
+    procedure Chromium1BeforeClose(Sender: TObject; const browser: ICefBrowser);
+
   protected
     FText : string;
     // Variables to control when can we destroy the form safely
     FCanClose : boolean;  // Set to True in TChromium.OnBeforeClose
     FClosing  : boolean;  // Set to True in the CloseQuery event.
+
+    FOffline : boolean;
 
     procedure BrowserCreatedMsg(var aMessage : TMessage); message CEF_AFTERCREATED;
     procedure BrowserDestroyMsg(var aMessage : TMessage); message CEF_DESTROY;
@@ -114,8 +103,8 @@ type
     procedure WMMoving(var aMessage : TMessage); message WM_MOVING;
     procedure WMEnterMenuLoop(var aMessage: TMessage); message WM_ENTERMENULOOP;
     procedure WMExitMenuLoop(var aMessage: TMessage); message WM_EXITMENULOOP;
-  public
-    { Public declarations }
+
+    function SwitchOfflineMode : integer;
   end;
 
 var
@@ -128,7 +117,7 @@ implementation
 {$R *.dfm}
 
 uses
-  uSimpleTextViewer, uCEFMiscFunctions, uTestExtensionHandler;
+  uSimpleTextViewer, uCEFMiscFunctions, uTestExtensionHandler, uCEFDictionaryValue;
 
 // BASIC CONCEPTS
 // ==============
@@ -275,8 +264,7 @@ uses
 //    the TChromium.OnClose event.
 // 2. TChromium.OnClose sends a CEFBROWSER_DESTROY message to destroy CEFWindowParent1
 //    in the main thread, which triggers the TChromium.OnBeforeClose event.
-// 3. TChromium.OnBeforeClose calls TCEFSentinel.Start, which will trigger TCEFSentinel.OnClose when the renderer processes are closed.
-// 4. TCEFSentinel.OnClose sets FCanClose := True and sends WM_CLOSE to the form.
+// 3. TChromium.OnBeforeClose sets FCanClose := True and sends WM_CLOSE to the form.
 
 
 procedure GlobalCEFApp_OnWebKitInitialized;
@@ -329,21 +317,15 @@ begin
   Chromium1.LoadURL(Edit1.Text);
 end;
 
-procedure TJSExtensionFrm.CEFSentinel1Close(Sender: TObject);
-begin
-  FCanClose := True;
-  PostMessage(Handle, WM_CLOSE, 0, 0);
-end;
-
 procedure TJSExtensionFrm.Chromium1AfterCreated(Sender: TObject; const browser: ICefBrowser);
 begin
   PostMessage(Handle, CEF_AFTERCREATED, 0, 0);
 end;
 
-procedure TJSExtensionFrm.Chromium1BeforeClose(Sender: TObject;
-  const browser: ICefBrowser);
+procedure TJSExtensionFrm.Chromium1BeforeClose(Sender: TObject; const browser: ICefBrowser);
 begin
-  CEFSentinel1.Start;
+  FCanClose := True;
+  PostMessage(Handle, WM_CLOSE, 0, 0);
 end;
 
 procedure TJSExtensionFrm.Chromium1BeforeContextMenu(Sender: TObject;
@@ -355,6 +337,8 @@ begin
   model.AddItem(MINIBROWSER_CONTEXTMENU_SETJSEVENT,   'Set mouseover event');
   model.AddItem(MINIBROWSER_CONTEXTMENU_JSVISITDOM,   'Visit DOM in JavaScript');
   model.AddItem(MINIBROWSER_CONTEXTMENU_SHOWDEVTOOLS, 'Show DevTools');
+  model.AddCheckItem(MINIBROWSER_CONTEXTMENU_OFFLINE, 'Offline');
+  model.SetChecked(MINIBROWSER_CONTEXTMENU_OFFLINE,   FOffline);
 end;
 
 procedure TJSExtensionFrm.Chromium1BeforePopup(Sender: TObject;
@@ -419,6 +403,29 @@ begin
         TempPoint.y := params.YCoord;
         Chromium1.ShowDevTools(TempPoint, nil);
       end;
+
+    MINIBROWSER_CONTEXTMENU_OFFLINE :
+      SwitchOfflineMode;
+  end;
+end;
+
+// This is a simple example to set the "offline" mode in the DevTools using the TChromium methods directly.
+function TJSExtensionFrm.SwitchOfflineMode : integer;
+var
+  TempParams : ICefDictionaryValue;
+begin
+  try
+    FOffline := not(FOffline);
+
+    TempParams := TCefDictionaryValueRef.New;
+    TempParams.SetBool('offline', FOffline);
+    TempParams.SetDouble('latency', 0);
+    TempParams.SetDouble('downloadThroughput', 0);
+    TempParams.SetDouble('uploadThroughput', 0);
+
+    Result := Chromium1.ExecuteDevToolsMethod(0, 'Network.emulateNetworkConditions', TempParams);
+  finally
+    TempParams := nil;
   end;
 end;
 

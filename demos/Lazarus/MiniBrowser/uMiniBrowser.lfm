@@ -15,7 +15,7 @@ object MiniBrowserFrm: TMiniBrowserFrm
   OnDestroy = FormDestroy
   OnShow = FormShow
   Position = poScreenCenter
-  LCLVersion = '2.0.6.0'
+  LCLVersion = '2.0.8.0'
   object Splitter1: TSplitter
     Left = 1179
     Height = 663
@@ -245,6 +245,7 @@ object MiniBrowserFrm: TMiniBrowserFrm
     OnNavigationVisitorResultAvailable = Chromium1NavigationVisitorResultAvailable
     OnDownloadImageFinished = Chromium1DownloadImageFinished
     OnCookiesFlushed = Chromium1CookiesFlushed
+    OnZoomPctAvailable = Chromium1ZoomPctAvailable
     OnRenderCompMsg = Chromium1RenderCompMsg
     OnLoadEnd = Chromium1LoadEnd
     OnLoadError = Chromium1LoadError
@@ -337,6 +338,10 @@ object MiniBrowserFrm: TMiniBrowserFrm
       Caption = 'Simulate keyboard presses'
       OnClick = MenuItem2Click
     end
+    object MenuItem4: TMenuItem
+      Caption = 'Accept language...'
+      OnClick = MenuItem4Click
+    end
     object MenuItem3: TMenuItem
       Caption = 'Flush cookies'
       OnClick = MenuItem3Click
@@ -368,10 +373,5 @@ object MiniBrowserFrm: TMiniBrowserFrm
     OnTimer = Timer1Timer
     left = 32
     top = 344
-  end
-  object CEFSentinel1: TCEFSentinel
-    OnClose = CEFSentinel1Close
-    left = 32
-    top = 404
   end
 end

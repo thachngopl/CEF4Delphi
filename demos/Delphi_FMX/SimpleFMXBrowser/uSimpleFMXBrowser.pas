@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -48,63 +48,73 @@ uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.StdCtrls,
   FMX.Edit, FMX.Controls.Presentation, uCEFFMXWindowParent, uCEFFMXChromium,
-  uCEFInterfaces, uCEFConstants, uCEFTypes;
+  System.SyncObjs,
+  uCEFInterfaces, uCEFConstants, uCEFTypes, uCEFChromiumCore, FMX.Layouts;
 
 const
   MINIBROWSER_CONTEXTMENU_SHOWDEVTOOLS    = MENU_ID_USER_FIRST + 1;
+
+  CEF_SHOWBROWSER   = WM_APP + $101;
 
 type
   TSimpleFMXBrowserFrm = class(TForm)
     AddressPnl: TPanel;
     AddressEdt: TEdit;
-    GoBtn: TButton;
     FMXChromium1: TFMXChromium;
     Timer1: TTimer;
+    SaveDialog1: TSaveDialog;
+    Layout1: TLayout;
+    GoBtn: TButton;
+    SnapShotBtn: TButton;
+
     procedure GoBtnClick(Sender: TObject);
+    procedure Timer1Timer(Sender: TObject);
+    procedure SnapShotBtnClick(Sender: TObject);
+
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
     procedure FormCreate(Sender: TObject);
-    procedure Timer1Timer(Sender: TObject);
     procedure FormShow(Sender: TObject);
-    procedure FMXChromium1Close(Sender: TObject;
-      const browser: ICefBrowser; var aAction : TCefCloseBrowserAction);
-    procedure FMXChromium1BeforeClose(Sender: TObject;
-      const browser: ICefBrowser);
-    procedure FMXChromium1BeforePopup(Sender: TObject;
-      const browser: ICefBrowser; const frame: ICefFrame; const targetUrl,
-      targetFrameName: ustring;
-      targetDisposition: TCefWindowOpenDisposition; userGesture: Boolean;
-      const popupFeatures: TCefPopupFeatures;
-      var windowInfo: TCefWindowInfo; var client: ICefClient;
-      var settings: TCefBrowserSettings;
-      var extra_info: ICefDictionaryValue;
-      var noJavascriptAccess, Result: Boolean);
     procedure FormResize(Sender: TObject);
-    procedure FMXChromium1AfterCreated(Sender: TObject;
-      const browser: ICefBrowser);
-    procedure FMXChromium1BeforeContextMenu(Sender: TObject;
-      const browser: ICefBrowser; const frame: ICefFrame;
-      const params: ICefContextMenuParams; const model: ICefMenuModel);
-    procedure FMXChromium1ContextMenuCommand(Sender: TObject;
-      const browser: ICefBrowser; const frame: ICefFrame;
-      const params: ICefContextMenuParams; commandId: Integer;
-      eventFlags: Cardinal; out Result: Boolean);
+
+    procedure FMXChromium1Close(Sender: TObject; const browser: ICefBrowser; var aAction : TCefCloseBrowserAction);
+    procedure FMXChromium1BeforeClose(Sender: TObject; const browser: ICefBrowser);
+    procedure FMXChromium1BeforePopup(Sender: TObject; const browser: ICefBrowser; const frame: ICefFrame; const targetUrl, targetFrameName: ustring; targetDisposition: TCefWindowOpenDisposition; userGesture: Boolean; const popupFeatures: TCefPopupFeatures; var windowInfo: TCefWindowInfo; var client: ICefClient; var settings: TCefBrowserSettings; var extra_info: ICefDictionaryValue; var noJavascriptAccess, Result: Boolean);
+    procedure FMXChromium1AfterCreated(Sender: TObject; const browser: ICefBrowser);
+    procedure FMXChromium1BeforeContextMenu(Sender: TObject; const browser: ICefBrowser; const frame: ICefFrame; const params: ICefContextMenuParams; const model: ICefMenuModel);
+    procedure FMXChromium1ContextMenuCommand(Sender: TObject; const browser: ICefBrowser; const frame: ICefFrame; const params: ICefContextMenuParams; commandId: Integer; eventFlags: Cardinal; out Result: Boolean);
 
   protected
     // Variables to control when can we destroy the form safely
     FCanClose : boolean;  // Set to True in TFMXChromium.OnBeforeClose
     FClosing  : boolean;  // Set to True in the CloseQuery event.
 
-    FMXWindowParent : TFMXWindowParent;
+    FMXWindowParent         : TFMXWindowParent;
+
+    {$IFDEF MSWINDOWS}
+    // This is a workaround for the issue #253
+    // https://github.com/salvadordf/CEF4Delphi/issues/253
+    FCustomWindowState      : TWindowState;
+    FOldWndPrc              : TFNWndProc;
+    FFormStub               : Pointer;
+    {$ENDIF}
 
     procedure LoadURL;
     procedure ResizeChild;
     procedure CreateFMXWindowParent;
-    function  PostCustomMessage(aMessage : cardinal; wParam : cardinal = 0; lParam : integer = 0) : boolean;
+    function  GetFMXWindowParentRect : System.Types.TRect;
+    function  PostCustomMessage(aMsg : cardinal; aWParam : WPARAM = 0; aLParam : LPARAM = 0) : boolean;
+
+    {$IFDEF MSWINDOWS}
+    function  GetCurrentWindowState : TWindowState;
+    procedure UpdateCustomWindowState;
+    procedure CreateHandle; override;
+    procedure DestroyHandle; override;
+    procedure CustomWndProc(var aMessage: TMessage);
+    {$ENDIF}
 
   public
-    procedure DoBrowserCreated;
-    procedure DoDestroyParent;
     procedure NotifyMoveOrResizeStarted;
+    procedure SetBounds(ALeft: Integer; ATop: Integer; AWidth: Integer; AHeight: Integer); override;
   end;
 
 var
@@ -128,8 +138,8 @@ implementation
 // or the domain "google.com". If you don't live in the US, you'll be redirected to
 // another domain which will take a little time too.
 
-// This demo uses a TFMXChromium and a TFMXWindowParent.
-// TFMXApplicationService is used to handle custom Windows messages
+// This demo uses a TFMXChromium and a TFMXWindowParent. It replaces the original WndProc with a
+// custom CustomWndProc procedure to handle Windows messages.
 
 // All FMX applications using CEF4Delphi should add the $(FrameworkType) conditional define
 // in the project options to avoid duplicated resources.
@@ -144,7 +154,7 @@ implementation
 
 uses
   FMX.Platform, FMX.Platform.Win,
-  uCEFMiscFunctions, uCEFApplication, uFMXApplicationService;
+  uCEFMiscFunctions, uCEFApplication;
 
 procedure CreateGlobalCEFApp;
 begin
@@ -225,7 +235,7 @@ begin
     end;
 end;
 
-function TSimpleFMXBrowserFrm.PostCustomMessage(aMessage, wParam : cardinal; lParam : integer) : boolean;
+function TSimpleFMXBrowserFrm.PostCustomMessage(aMsg : cardinal; aWParam : WPARAM; aLParam : LPARAM) : boolean;
 {$IFDEF MSWINDOWS}
 var
   TempHWND : HWND;
@@ -233,11 +243,131 @@ var
 begin
   {$IFDEF MSWINDOWS}
   TempHWND := FmxHandleToHWND(Handle);
-  Result   := (TempHWND <> 0) and WinApi.Windows.PostMessage(TempHWND, aMessage, wParam, lParam);
+  Result   := (TempHWND <> 0) and WinApi.Windows.PostMessage(TempHWND, aMsg, aWParam, aLParam);
   {$ELSE}
   Result   := False;
   {$ENDIF}
 end;
+
+{$IFDEF MSWINDOWS}
+procedure TSimpleFMXBrowserFrm.CreateHandle;
+begin
+  inherited CreateHandle;
+
+  FFormStub  := MakeObjectInstance(CustomWndProc);
+  FOldWndPrc := TFNWndProc(SetWindowLongPtr(FmxHandleToHWND(Handle), GWLP_WNDPROC, NativeInt(FFormStub)));
+end;
+
+procedure TSimpleFMXBrowserFrm.DestroyHandle;
+begin
+  SetWindowLongPtr(FmxHandleToHWND(Handle), GWLP_WNDPROC, NativeInt(FOldWndPrc));
+  FreeObjectInstance(FFormStub);
+
+  inherited DestroyHandle;
+end;
+
+procedure TSimpleFMXBrowserFrm.CustomWndProc(var aMessage: TMessage);
+const
+  SWP_STATECHANGED = $8000;  // Undocumented
+var
+  TempWindowPos : PWindowPos;
+begin
+  try
+    case aMessage.Msg of
+      WM_ENTERMENULOOP :
+        if (aMessage.wParam = 0) and
+           (GlobalCEFApp <> nil) then
+          GlobalCEFApp.OsmodalLoop := True;
+
+      WM_EXITMENULOOP :
+        if (aMessage.wParam = 0) and
+           (GlobalCEFApp <> nil) then
+          GlobalCEFApp.OsmodalLoop := False;
+
+      WM_MOVE,
+      WM_MOVING : NotifyMoveOrResizeStarted;
+
+      WM_SIZE :
+        if (aMessage.wParam = SIZE_RESTORED) then
+          UpdateCustomWindowState;
+
+      WM_WINDOWPOSCHANGING :
+        begin
+          TempWindowPos := TWMWindowPosChanging(aMessage).WindowPos;
+          if ((TempWindowPos.Flags and SWP_STATECHANGED) <> 0) then
+            UpdateCustomWindowState;
+        end;
+
+      WM_SHOWWINDOW :
+        if (aMessage.wParam <> 0) and (aMessage.lParam = SW_PARENTOPENING) then
+          PostCustomMessage(CEF_SHOWBROWSER);
+
+      CEF_AFTERCREATED :
+        begin
+          Caption            := 'Simple FMX Browser';
+          AddressPnl.Enabled := True;
+        end;
+
+      CEF_DESTROY :
+        if (FMXWindowParent <> nil) then
+          FreeAndNil(FMXWindowParent);
+
+      CEF_SHOWBROWSER :
+        if (FMXWindowParent <> nil) then
+          begin
+            FMXWindowParent.WindowState := TWindowState.wsNormal;
+            FMXWindowParent.Show;
+            FMXWindowParent.SetBounds(GetFMXWindowParentRect);
+          end;
+    end;
+
+    aMessage.Result := CallWindowProc(FOldWndPrc, FmxHandleToHWND(Handle), aMessage.Msg, aMessage.wParam, aMessage.lParam);
+  except
+    on e : exception do
+      if CustomExceptionHandler('TSimpleFMXBrowserFrm.CustomWndProc', e) then raise;
+  end;
+end;
+
+procedure TSimpleFMXBrowserFrm.UpdateCustomWindowState;
+var
+  TempNewState : TWindowState;
+begin
+  TempNewState := GetCurrentWindowState;
+
+  if (FCustomWindowState <> TempNewState) then
+    begin
+      // This is a workaround for the issue #253
+      // https://github.com/salvadordf/CEF4Delphi/issues/253
+      if (FCustomWindowState = TWindowState.wsMinimized) then
+        PostCustomMessage(CEF_SHOWBROWSER);
+
+      FCustomWindowState := TempNewState;
+    end;
+end;
+
+function TSimpleFMXBrowserFrm.GetCurrentWindowState : TWindowState;
+var
+  TempPlacement : TWindowPlacement;
+  TempHWND      : HWND;
+begin
+  // TForm.WindowState is not updated correctly in FMX forms.
+  // We have to call the GetWindowPlacement function in order to read the window state correctly.
+
+  Result   := TWindowState.wsNormal;
+  TempHWND := FmxHandleToHWND(Handle);
+
+  ZeroMemory(@TempPlacement, SizeOf(TWindowPlacement));
+  TempPlacement.Length := SizeOf(TWindowPlacement);
+
+  if GetWindowPlacement(TempHWND, @TempPlacement) then
+    case TempPlacement.showCmd of
+      SW_SHOWMAXIMIZED : Result := TWindowState.wsMaximized;
+      SW_SHOWMINIMIZED : Result := TWindowState.wsMinimized;
+    end;
+
+  if IsIconic(TempHWND) then Result := TWindowState.wsMinimized;
+end;
+{$ENDIF}
 
 procedure TSimpleFMXBrowserFrm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
 begin
@@ -253,12 +383,13 @@ end;
 
 procedure TSimpleFMXBrowserFrm.FormCreate(Sender: TObject);
 begin
-  // TFMXApplicationService is used to handle custom Windows messages
-  TFMXApplicationService.AddPlatformService;
+  FCanClose          := False;
+  FClosing           := False;
+  FMXWindowParent    := nil;
 
-  FCanClose       := False;
-  FClosing        := False;
-  FMXWindowParent := nil;
+  {$IFDEF MSWINDOWS}
+  FCustomWindowState := WindowState;
+  {$ENDIF}
 end;
 
 procedure TSimpleFMXBrowserFrm.FormResize(Sender: TObject);
@@ -267,10 +398,43 @@ begin
   ResizeChild;
 end;
 
+function TSimpleFMXBrowserFrm.GetFMXWindowParentRect : System.Types.TRect;
+var
+  TempScale : single;
+begin
+  TempScale     := FMXChromium1.ScreenScale;
+  Result.Left   := 0;
+  Result.Top    := round(AddressPnl.Height * TempScale);
+  Result.Right  := round(ClientWidth  * TempScale) - 1;
+  Result.Bottom := round(ClientHeight * TempScale) - 1;
+end;
+
 procedure TSimpleFMXBrowserFrm.ResizeChild;
 begin
   if (FMXWindowParent <> nil) then
-    FMXWindowParent.SetBounds(0, round(AddressPnl.Height), ClientWidth - 1, ClientHeight -  1);
+    FMXWindowParent.SetBounds(GetFMXWindowParentRect);
+end;
+
+procedure TSimpleFMXBrowserFrm.SnapShotBtnClick(Sender: TObject);
+var
+  TempBitmap : TBitmap;
+begin
+  TempBitmap := nil;
+
+  try
+    SaveDialog1.DefaultExt := 'bmp';
+    SaveDialog1.Filter     := 'Bitmap files (*.bmp)|*.BMP';
+
+    if SaveDialog1.Execute and (length(SaveDialog1.FileName) > 0) then
+      begin
+        TempBitmap := TBitmap.Create;
+
+        if FMXChromium1.TakeSnapshot(TempBitmap, GetFMXWindowParentRect) then
+          TempBitmap.SaveToFile(SaveDialog1.FileName);
+      end;
+  finally
+    if (TempBitmap <> nil) then FreeAndNil(TempBitmap);
+  end;
 end;
 
 procedure TSimpleFMXBrowserFrm.CreateFMXWindowParent;
@@ -318,6 +482,16 @@ begin
   LoadURL;
 end;
 
+procedure TSimpleFMXBrowserFrm.SetBounds(ALeft, ATop, AWidth, AHeight: Integer);
+var
+  PositionChanged: Boolean;
+begin
+  PositionChanged := (ALeft <> Left) or (ATop <> Top);
+  inherited SetBounds(ALeft, ATop, AWidth, AHeight);
+  if PositionChanged then
+    NotifyMoveOrResizeStarted;
+end;
+
 procedure TSimpleFMXBrowserFrm.NotifyMoveOrResizeStarted;
 begin
   if (FMXChromium1 <> nil) then FMXChromium1.NotifyMoveOrResizeStarted;
@@ -339,18 +513,6 @@ begin
 
   if not(FMXChromium1.CreateBrowser(TempHandle, TempRect)) and not(FMXChromium1.Initialized) then
     Timer1.Enabled := True;
-end;
-
-procedure TSimpleFMXBrowserFrm.DoBrowserCreated;
-begin
-  // Now the browser is fully initialized
-  Caption            := 'Simple FMX Browser';
-  AddressPnl.Enabled := True;
-end;
-
-procedure TSimpleFMXBrowserFrm.DoDestroyParent;
-begin
-  if (FMXWindowParent <> nil) then FreeAndNil(FMXWindowParent);
 end;
 
 procedure TSimpleFMXBrowserFrm.LoadURL;

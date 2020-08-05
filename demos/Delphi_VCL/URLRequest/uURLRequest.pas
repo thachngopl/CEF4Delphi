@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Díaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Díaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -47,8 +47,7 @@ uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics,
   Controls, Forms, Dialogs, ComCtrls, StdCtrls,
   {$ENDIF}
-  uCEFInterfaces, uCEFUrlRequestClientComponent, uCEFRequest, uCEFUrlRequest,
-  uCEFSentinel;
+  uCEFInterfaces, uCEFUrlRequestClientComponent, uCEFRequest, uCEFUrlRequest;
 
 const
   URLREQUEST_SUCCESS    = WM_APP + $101;
@@ -78,12 +77,10 @@ type
     Label6: TLabel;
     PostParam2NameEdt: TEdit;
     PostParam2ValueEdt: TEdit;
-    CEFSentinel1: TCEFSentinel;
 
     procedure DownloadBtnClick(Sender: TObject);
     procedure SendPostReqBtnClick(Sender: TObject);
     procedure Button1Click(Sender: TObject);
-    procedure CEFSentinel1Close(Sender: TObject);
 
     procedure FormDestroy(Sender: TObject);
     procedure FormCreate(Sender: TObject);
@@ -136,8 +133,7 @@ implementation
 // 1- Set CanClose to FALSE in the TForm.OnCloseQuery event and set FClosing to TRUE.
 // 2- The next time TCEFUrlRequestClientComponent.OnDownloadProgress is executed we call request.Cancel, which triggers the
 //    TCEFUrlRequestClientComponent.OnRequestComplete event.
-// 3- in the TCEFUrlRequestClientComponent.OnRequestComplete event we call TCEFSentinel.Start, which will trigger TCEFSentinel.OnClose when the renderer processes are closed.
-// 4- TCEFSentinel.OnClose sets FCanClose := True and sends WM_CLOSE to the form.
+// 3- The TCEFUrlRequestClientComponent.OnRequestComplete event sets FCanClose := True and sends WM_CLOSE to the form.
 
 uses
   ShellApi,
@@ -223,12 +219,6 @@ end;
 procedure TURLRequestFrm.Button1Click(Sender: TObject);
 begin
   ShellExecute(0, 'open', 'https://ptsv2.com/t/cef4delphi', nil, nil, SW_SHOWNORMAL);
-end;
-
-procedure TURLRequestFrm.CEFSentinel1Close(Sender: TObject);
-begin
-  FCanClose := True;
-  PostMessage(Handle, WM_CLOSE, 0, 0);
 end;
 
 procedure TURLRequestFrm.CEFUrlRequestClientComponent1CreateURLRequest(Sender: TObject);
@@ -354,7 +344,10 @@ begin
   // Use request.response here to get a ICefResponse interface with all the response headers, status, error code, etc.
 
   if FClosing then
-    CEFSentinel1.Start
+    begin
+      FCanClose := True;
+      PostMessage(Handle, WM_CLOSE, 0, 0);
+    end
    else
     if (request <> nil) and (request.RequestStatus = UR_SUCCESS) then
       PostMessage(Handle, URLREQUEST_SUCCESS, 0, 0)

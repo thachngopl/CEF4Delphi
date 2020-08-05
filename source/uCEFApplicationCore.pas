@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -55,20 +55,20 @@ uses
     {$ENDIF}
     System.Classes, System.UITypes,
   {$ELSE}
-    {$IFDEF MSWINDOWS}Windows, {$ENDIF} Classes, {$IFDEF FPC}dynlibs,{$ENDIF}
+    {$IFDEF MSWINDOWS}Windows,{$ENDIF} Classes, {$IFDEF FPC}dynlibs,{$ENDIF}
   {$ENDIF}
   uCEFTypes, uCEFInterfaces, uCEFBaseRefCounted, uCEFSchemeRegistrar;
 
 const
-  CEF_SUPPORTED_VERSION_MAJOR   = 78;
+  CEF_SUPPORTED_VERSION_MAJOR   = 84;
   CEF_SUPPORTED_VERSION_MINOR   = 3;
-  CEF_SUPPORTED_VERSION_RELEASE = 1;
+  CEF_SUPPORTED_VERSION_RELEASE = 10;
   CEF_SUPPORTED_VERSION_BUILD   = 0;
 
-  CEF_CHROMEELF_VERSION_MAJOR   = 78;
+  CEF_CHROMEELF_VERSION_MAJOR   = 84;
   CEF_CHROMEELF_VERSION_MINOR   = 0;
-  CEF_CHROMEELF_VERSION_RELEASE = 3904;
-  CEF_CHROMEELF_VERSION_BUILD   = 87;
+  CEF_CHROMEELF_VERSION_RELEASE = 4147;
+  CEF_CHROMEELF_VERSION_BUILD   = 105;
 
   {$IFDEF MSWINDOWS}
   LIBCEF_DLL                    = 'libcef.dll';
@@ -131,16 +131,20 @@ type
       FMuteAudio                     : boolean;
       FReRaiseExceptions             : boolean;
       FShowMessageDlg                : boolean;
+      FMissingBinariesException      : boolean;
       FSetCurrentDir                 : boolean;
       FGlobalContextInitialized      : boolean;
       FSitePerProcess                : boolean;
       FDisableWebSecurity            : boolean;
       FDisablePDFExtension           : boolean;
       FLogProcessInfo                : boolean;
-      FEnableFeatures                : string;
-      FDisableFeatures               : string;
-      FEnableBlinkFeatures           : string;
-      FDisableBlinkFeatures          : string;
+      FDisableSiteIsolationTrials    : boolean;
+      FEnableFeatures                : ustring;
+      FDisableFeatures               : ustring;
+      FEnableBlinkFeatures           : ustring;
+      FDisableBlinkFeatures          : ustring;
+      FForceFieldTrials              : ustring;
+      FForceFieldTrialParams         : ustring;
       FChromeVersionInfo             : TFileVersionInfo;
       {$IFDEF FPC}
       FLibHandle                     : TLibHandle;
@@ -163,6 +167,9 @@ type
       FMetricsRecordingOnly          : boolean;
       FAllowFileAccessFromFiles      : boolean;
       FAllowRunningInsecureContent   : boolean;
+      FSupportedSchemes              : TStringList;
+      FDisableNewBrowserInfoTimeout  : boolean;
+      FDevToolsProtocolLogFile       : ustring;
 
       FPluginPolicy                      : TCefPluginPolicySwitch;
       FDefaultEncoding                   : string;
@@ -229,17 +236,17 @@ type
       procedure SetLocalesDirPath(const aValue : ustring);
       procedure SetOsmodalLoop(aValue : boolean);
 
-      function  GetChromeVersion : string;
-      function  GetLibCefVersion : string;
-      function  GetLibCefPath : string;
-      function  GetChromeElfPath : string;
-      function  GetMustCreateResourceBundleHandler : boolean;
-      function  GetMustCreateBrowserProcessHandler : boolean;
-      function  GetMustCreateRenderProcessHandler : boolean;
-      function  GetMustCreateLoadHandler : boolean;
+      function  GetChromeVersion : ustring;
+      function  GetLibCefVersion : ustring;
+      function  GetLibCefPath : ustring;
+      function  GetChromeElfPath : ustring;
+      function  GetMustCreateResourceBundleHandler : boolean; virtual;
+      function  GetMustCreateBrowserProcessHandler : boolean; virtual;
+      function  GetMustCreateRenderProcessHandler : boolean; virtual;
+      function  GetMustCreateLoadHandler : boolean; virtual;
       function  GetGlobalContextInitialized : boolean;
       function  GetChildProcessesCount : integer;
-      function  GetUsedMemory : cardinal;
+      function  GetUsedMemory : uint64;
       function  GetTotalSystemMemory : uint64;
       function  GetAvailableSystemMemory : uint64;
       function  GetSystemMemoryLoad : cardinal;
@@ -254,6 +261,7 @@ type
       function  Load_cef_file_util_capi_h : boolean;
       function  Load_cef_image_capi_h : boolean;
       function  Load_cef_menu_model_capi_h : boolean;
+      function  Load_cef_media_router_capi_h : boolean;
       function  Load_cef_origin_whitelist_capi_h : boolean;
       function  Load_cef_parser_capi_h : boolean;
       function  Load_cef_path_util_capi_h : boolean;
@@ -310,10 +318,14 @@ type
       function  CheckCEFLibrary : boolean;
       procedure RegisterWidevineCDM;
       {$IFDEF MSWINDOWS}
-      function  FindFlashDLL(var aFileName : string) : boolean;
+      function  FindFlashDLL(var aFileName : ustring) : boolean;
       {$ENDIF}
       procedure ShowErrorMessageDlg(const aError : string); virtual;
+      procedure UpdateSupportedSchemes(aIncludeDefaults : boolean = True); virtual;
       function  ParseProcessType : TCefProcessType;
+      procedure AddCustomCommandLineSwitches(var aKeys, aValues : TStringList); virtual;
+      procedure AppendSwitch(var aKeys, aValues : TStringList; const aNewKey : ustring; const aNewValue : ustring = '');
+      procedure ReplaceSwitch(var aKeys, aValues : TStringList; const aNewKey : ustring; const aNewValue : ustring = '');
 
     public
       constructor Create;
@@ -392,10 +404,12 @@ type
       property EnableSpeechInput                 : boolean                             read FEnableSpeechInput                 write FEnableSpeechInput;                // --enable-speech-input
       property UseFakeUIForMediaStream           : boolean                             read FUseFakeUIForMediaStream           write FUseFakeUIForMediaStream;          // --use-fake-ui-for-media-stream
       property EnableGPU                         : boolean                             read FEnableGPU                         write FEnableGPU;                        // --enable-gpu-plugin
-      property EnableFeatures                    : string                              read FEnableFeatures                    write FEnableFeatures;                   // --enable-features
-      property DisableFeatures                   : string                              read FDisableFeatures                   write FDisableFeatures;                  // --disable-features
-      property EnableBlinkFeatures               : string                              read FEnableBlinkFeatures               write FEnableBlinkFeatures;              // --enable-blink-features
-      property DisableBlinkFeatures              : string                              read FDisableBlinkFeatures              write FDisableBlinkFeatures;             // --disable-blink-features
+      property EnableFeatures                    : ustring                             read FEnableFeatures                    write FEnableFeatures;                   // --enable-features
+      property DisableFeatures                   : ustring                             read FDisableFeatures                   write FDisableFeatures;                  // --disable-features
+      property EnableBlinkFeatures               : ustring                             read FEnableBlinkFeatures               write FEnableBlinkFeatures;              // --enable-blink-features
+      property DisableBlinkFeatures              : ustring                             read FDisableBlinkFeatures              write FDisableBlinkFeatures;             // --disable-blink-features
+      property ForceFieldTrials                  : ustring                             read FForceFieldTrials                  write FForceFieldTrials;                 // --force-fieldtrials
+      property ForceFieldTrialParams             : ustring                             read FForceFieldTrialParams             write FForceFieldTrialParams;            // --force-fieldtrial-params
       property SmoothScrolling                   : TCefState                           read FSmoothScrolling                   write FSmoothScrolling;                  // --enable-smooth-scrolling
       property FastUnload                        : boolean                             read FFastUnload                        write FFastUnload;                       // --enable-fast-unload
       property DisableSafeBrowsing               : boolean                             read FDisableSafeBrowsing               write FDisableSafeBrowsing;              // --safebrowsing-disable-auto-update
@@ -403,6 +417,7 @@ type
       property SitePerProcess                    : boolean                             read FSitePerProcess                    write FSitePerProcess;                   // --site-per-process
       property DisableWebSecurity                : boolean                             read FDisableWebSecurity                write FDisableWebSecurity;               // --disable-web-security
       property DisablePDFExtension               : boolean                             read FDisablePDFExtension               write FDisablePDFExtension;              // --disable-pdf-extension
+      property DisableSiteIsolationTrials        : boolean                             read FDisableSiteIsolationTrials        write FDisableSiteIsolationTrials;       // --disable-site-isolation-trials
       property DisableExtensions                 : boolean                             read FDisableExtensions                 write FDisableExtensions;                // --disable-extensions
       property AutoplayPolicy                    : TCefAutoplayPolicy                  read FAutoplayPolicy                    write FAutoplayPolicy;                   // --autoplay-policy
       property DisableBackgroundNetworking       : boolean                             read FDisableBackgroundNetworking       write FDisableBackgroundNetworking;      // --disable-background-networking
@@ -428,6 +443,8 @@ type
       property TouchEvents                       : TCefState                           read FTouchEvents                       write FTouchEvents;                      // --touch-events
       property DisableReadingFromCanvas          : boolean                             read FDisableReadingFromCanvas          write FDisableReadingFromCanvas;         // --disable-reading-from-canvas
       property HyperlinkAuditing                 : boolean                             read FHyperlinkAuditing                 write FHyperlinkAuditing;                // --no-pings
+      property DisableNewBrowserInfoTimeout      : boolean                             read FDisableNewBrowserInfoTimeout      write FDisableNewBrowserInfoTimeout;     // --disable-new-browser-info-timeout
+      property DevToolsProtocolLogFile           : ustring                             read FDevToolsProtocolLogFile           write FDevToolsProtocolLogFile;          // --devtools-protocol-log-file
 
       // Properties used during the CEF initialization
       property WindowsSandboxInfo                : Pointer                             read FWindowsSandboxInfo                write FWindowsSandboxInfo;
@@ -438,16 +455,17 @@ type
       property DeleteCookies                     : boolean                             read FDeleteCookies                     write FDeleteCookies;
       property CheckCEFFiles                     : boolean                             read FCheckCEFFiles                     write FCheckCEFFiles;
       property ShowMessageDlg                    : boolean                             read FShowMessageDlg                    write FShowMessageDlg;
+      property MissingBinariesException          : boolean                             read FMissingBinariesException          write FMissingBinariesException;
       property SetCurrentDir                     : boolean                             read FSetCurrentDir                     write FSetCurrentDir;
       property GlobalContextInitialized          : boolean                             read GetGlobalContextInitialized;
       property ChromeMajorVer                    : uint16                              read FChromeVersionInfo.MajorVer;
       property ChromeMinorVer                    : uint16                              read FChromeVersionInfo.MinorVer;
       property ChromeRelease                     : uint16                              read FChromeVersionInfo.Release;
       property ChromeBuild                       : uint16                              read FChromeVersionInfo.Build;
-      property ChromeVersion                     : string                              read GetChromeVersion;
-      property LibCefVersion                     : string                              read GetLibCefVersion;
-      property LibCefPath                        : string                              read GetLibCefPath;
-      property ChromeElfPath                     : string                              read GetChromeElfPath;
+      property ChromeVersion                     : ustring                             read GetChromeVersion;
+      property LibCefVersion                     : ustring                             read GetLibCefVersion;
+      property LibCefPath                        : ustring                             read GetLibCefPath;
+      property ChromeElfPath                     : ustring                             read GetChromeElfPath;
       property LibLoaded                         : boolean                             read FLibLoaded;
       property LogProcessInfo                    : boolean                             read FLogProcessInfo                    write FLogProcessInfo;
       property ReRaiseExceptions                 : boolean                             read FReRaiseExceptions                 write FReRaiseExceptions;
@@ -466,10 +484,11 @@ type
       property WidevinePath                      : ustring                             read FWidevinePath                      write FWidevinePath;
       property MustFreeLibrary                   : boolean                             read FMustFreeLibrary                   write FMustFreeLibrary;
       property ChildProcessesCount               : integer                             read GetChildProcessesCount;
-      property UsedMemory                        : cardinal                            read GetUsedMemory;
+      property UsedMemory                        : uint64                              read GetUsedMemory;
       property TotalSystemMemory                 : uint64                              read GetTotalSystemMemory;
       property AvailableSystemMemory             : uint64                              read GetAvailableSystemMemory;
       property SystemMemoryLoad                  : cardinal                            read GetSystemMemoryLoad;
+      property SupportedSchemes                  : TStringList                         read FSupportedSchemes;
 
       // ICefApp
       property OnRegCustomSchemes                : TOnRegisterCustomSchemesEvent       read FOnRegisterCustomSchemes           write FOnRegisterCustomSchemes;
@@ -629,10 +648,12 @@ begin
   FSitePerProcess                := False;
   FDisableWebSecurity            := False;
   FDisablePDFExtension           := False;
+  FDisableSiteIsolationTrials    := False;
   FLogProcessInfo                := False;
   FReRaiseExceptions             := False;
   FLibLoaded                     := False;
   FShowMessageDlg                := True;
+  FMissingBinariesException      := False;
   FSetCurrentDir                 := False;
   FGlobalContextInitialized      := False;
   FCheckDevToolsResources        := True;
@@ -654,6 +675,11 @@ begin
   FDisableFeatures               := '';
   FEnableBlinkFeatures           := '';
   FDisableBlinkFeatures          := '';
+  FForceFieldTrials              := '';
+  FForceFieldTrialParams         := '';
+  FSupportedSchemes              := nil;
+  FDisableNewBrowserInfoTimeout  := False;
+  FDevToolsProtocolLogFile       := '';
 
   FDisableJavascriptCloseWindows     := False;
   FDisableJavascriptAccessClipboard  := False;
@@ -719,7 +745,8 @@ begin
   FChromeVersionInfo.Build       := CEF_CHROMEELF_VERSION_BUILD;
 
   {$IFDEF MSWINDOWS}
-  if (FProcessType = ptBrowser) then GetDLLVersion(ChromeElfPath, FChromeVersionInfo);
+  if (FProcessType = ptBrowser) then
+    GetDLLVersion(ChromeElfPath, FChromeVersionInfo);
   {$ENDIF}
 
   IsMultiThread := True;
@@ -729,15 +756,18 @@ end;
 
 destructor TCefApplicationCore.Destroy;
 begin
-  if GlobalCEFApp = Self then
+  if (GlobalCEFApp = Self) then
     GlobalCEFApp := nil;
+
   try
-    if (FProcessType = ptBrowser) then ShutDown;
+    if (FProcessType = ptBrowser) then
+      ShutDown;
 
     FreeLibcefLibrary;
 
     if (FCustomCommandLines      <> nil) then FreeAndNil(FCustomCommandLines);
     if (FCustomCommandLineValues <> nil) then FreeAndNil(FCustomCommandLineValues);
+    if (FSupportedSchemes        <> nil) then FreeAndNil(FSupportedSchemes);
   finally
     inherited Destroy;
   end;
@@ -749,6 +779,7 @@ begin
 
   FCustomCommandLines      := TStringList.Create;
   FCustomCommandLineValues := TStringList.Create;
+  FSupportedSchemes        := TStringList.Create;
 end;
 
 procedure TCefApplicationCore.AddCustomCommandLine(const aCommandLine, aValue : string);
@@ -797,7 +828,9 @@ begin
   try
     if CheckCEFLibrary and LoadCEFlibrary then
       begin
-        if ProcessType <> ptBrowser then BeforeInitSubProcess;
+        if (FProcessType <> ptBrowser) then
+          BeforeInitSubProcess;
+
         TempApp := TCustomCefApp.Create(self);
         Result  := (ExecuteProcess(TempApp) < 0) and InitializeLibrary(TempApp);
       end;
@@ -811,12 +844,12 @@ begin
   // Is implemented by TCefApplication
 end;
 
-function TCefApplicationCore.GetChromeVersion : string;
+function TCefApplicationCore.GetChromeVersion : ustring;
 begin
   Result := FileVersionInfoToString(FChromeVersionInfo);
 end;
 
-function TCefApplicationCore.GetLibCefVersion : string;
+function TCefApplicationCore.GetLibCefVersion : ustring;
 begin
   Result := IntToStr(CEF_SUPPORTED_VERSION_MAJOR)    + '.' +
             IntToStr(CEF_SUPPORTED_VERSION_MINOR)    + '.' +
@@ -824,7 +857,7 @@ begin
             IntToStr(CEF_SUPPORTED_VERSION_BUILD);
 end;
 
-function TCefApplicationCore.GetLibCefPath : string;
+function TCefApplicationCore.GetLibCefPath : ustring;
 begin
   if (length(FFrameworkDirPath) > 0) then
     Result := IncludeTrailingPathDelimiter(FFrameworkDirPath) + LIBCEF_DLL
@@ -832,7 +865,7 @@ begin
     Result := LIBCEF_DLL;
 end;
 
-function TCefApplicationCore.GetChromeElfPath : string;
+function TCefApplicationCore.GetChromeElfPath : ustring;
 begin
   if (length(FFrameworkDirPath) > 0) then
     Result := IncludeTrailingPathDelimiter(FFrameworkDirPath) + CHROMEELF_DLL
@@ -1102,10 +1135,15 @@ begin
     if (aApp <> nil) then
       begin
         {$IFDEF MSWINDOWS}
-        TempArgs.instance := HINSTANCE{$IFDEF FPC}(){$ENDIF};
+          TempArgs.instance := HINSTANCE{$IFDEF FPC}(){$ENDIF};
         {$ELSE}
-        TempArgs.argc     := argc;
-        TempArgs.argv     := argv;
+          {$IFDEF LINUX}
+          TempArgs.argc := argc;
+          TempArgs.argv := argv;
+          {$ELSE}
+          TempArgs.argc := 0;
+          TempArgs.argv := 0;
+          {$ENDIF}
         {$ENDIF}
 
         Result := cef_execute_process(@TempArgs, aApp.Wrap, FWindowsSandboxInfo);
@@ -1176,10 +1214,15 @@ begin
           InitializeSettings(FAppSettings);
 
           {$IFDEF MSWINDOWS}
-          TempArgs.instance := HINSTANCE{$IFDEF FPC}(){$ENDIF};
+            TempArgs.instance := HINSTANCE{$IFDEF FPC}(){$ENDIF};
           {$ELSE}
-          TempArgs.argc     := argc;
-          TempArgs.argv     := argv;
+            {$IFDEF LINUX}
+            TempArgs.argc := argc;
+            TempArgs.argv := argv;
+            {$ELSE}
+            TempArgs.argc := 0;
+            TempArgs.argv := 0;
+            {$ENDIF}
           {$ENDIF}
 
           if (cef_initialize(@TempArgs, @FAppSettings, aApp.Wrap, FWindowsSandboxInfo) <> 0) then
@@ -1206,6 +1249,7 @@ begin
   try
     TempFiles.Add('Cookies');
     TempFiles.Add('Cookies-journal');
+    TempFiles.Add('LocalPrefs.json');
 
     DeleteDirContents(aDirectory, TempFiles);
   finally
@@ -1322,10 +1366,10 @@ begin
 end;
 
 {$IFDEF MSWINDOWS}
-function TCefApplicationCore.FindFlashDLL(var aFileName : string) : boolean;
+function TCefApplicationCore.FindFlashDLL(var aFileName : ustring) : boolean;
 var
   TempSearchRec : TSearchRec;
-  TempProductName, TempPath : string;
+  TempProductName, TempPath : ustring;
 begin
   Result    := False;
   aFileName := '';
@@ -1367,6 +1411,27 @@ begin
       MessageBox(0, PChar(aError + #0), PChar('Error' + #0), MB_ICONERROR or MB_OK or MB_TOPMOST);
       {$ENDIF}
     end;
+
+  if FMissingBinariesException then
+    raise Exception.Create(aError);
+end;
+
+procedure TCefApplicationCore.UpdateSupportedSchemes(aIncludeDefaults : boolean);
+var
+  TempManager : ICefCookieManager;
+begin
+  try
+    if (FSupportedSchemes       <> nil) and
+       (FSupportedSchemes.Count  > 0)   then
+      begin
+        TempManager := TCefCookieManagerRef.Global(nil);
+
+        if (TempManager <> nil) then
+          TempManager.SetSupportedSchemes(FSupportedSchemes, aIncludeDefaults, nil);
+      end;
+  finally
+    TempManager := nil;
+  end;
 end;
 
 function TCefApplicationCore.ParseProcessType : TCefProcessType;
@@ -1410,23 +1475,28 @@ end;
 procedure TCefApplicationCore.Internal_OnContextInitialized;
 begin
   FGlobalContextInitialized := True;
+  UpdateSupportedSchemes;
 
-  if assigned(FOnContextInitialized) then FOnContextInitialized();
+  if assigned(FOnContextInitialized) then
+    FOnContextInitialized();
 end;
 
 procedure TCefApplicationCore.Internal_OnBeforeChildProcessLaunch(const commandLine: ICefCommandLine);
 begin
-  if assigned(FOnBeforeChildProcessLaunch) then FOnBeforeChildProcessLaunch(commandLine);
+  if assigned(FOnBeforeChildProcessLaunch) then
+    FOnBeforeChildProcessLaunch(commandLine);
 end;
 
 procedure TCefApplicationCore.Internal_OnRenderProcessThreadCreated(const extraInfo: ICefListValue);
 begin
-  if assigned(FOnRenderProcessThreadCreated) then FOnRenderProcessThreadCreated(extraInfo);
+  if assigned(FOnRenderProcessThreadCreated) then
+    FOnRenderProcessThreadCreated(extraInfo);
 end;
 
 procedure TCefApplicationCore.Internal_OnScheduleMessagePumpWork(const delayMs: Int64);
 begin
-  if assigned(FOnScheduleMessagePumpWork) then FOnScheduleMessagePumpWork(delayMs);
+  if assigned(FOnScheduleMessagePumpWork) then
+    FOnScheduleMessagePumpWork(delayMs);
 end;
 
 function TCefApplicationCore.Internal_GetLocalizedString(stringid: Integer; var stringVal: ustring) : boolean;
@@ -1436,7 +1506,8 @@ begin
   // The stringId must be one of the values defined in the CEF file :
   // /include/cef_pack_strings.h
   // That file is available in the CEF binaries package.
-  if assigned(FOnGetLocalizedString) then FOnGetLocalizedString(stringId, stringVal, Result);
+  if assigned(FOnGetLocalizedString) then
+    FOnGetLocalizedString(stringId, stringVal, Result);
 end;
 
 function TCefApplicationCore.Internal_GetDataResource(resourceId: Integer; var data: Pointer; var dataSize: NativeUInt) : boolean;
@@ -1446,7 +1517,8 @@ begin
   // The resourceId must be one of the values defined in the CEF file :
   // /include/cef_pack_resources.h
   // That file is available in the CEF binaries package.
-  if assigned(FOnGetDataResource) then FOnGetDataResource(resourceId, data, dataSize, Result);
+  if assigned(FOnGetDataResource) then
+    FOnGetDataResource(resourceId, data, dataSize, Result);
 end;
 
 function TCefApplicationCore.Internal_GetDataResourceForScale(resourceId: Integer; scaleFactor: TCefScaleFactor; var data: Pointer; var dataSize: NativeUInt) : boolean;
@@ -1456,47 +1528,56 @@ begin
   // The resourceId must be one of the values defined in the CEF file :
   // /include/cef_pack_resources.h
   // That file is available in the CEF binaries package.
-  if assigned(FOnGetDataResourceForScale) then FOnGetDataResourceForScale(resourceId, scaleFactor, data, dataSize, Result);
+  if assigned(FOnGetDataResourceForScale) then
+    FOnGetDataResourceForScale(resourceId, scaleFactor, data, dataSize, Result);
 end;
 
 procedure TCefApplicationCore.Internal_OnRenderThreadCreated(const extraInfo: ICefListValue);
 begin
-  if assigned(FOnRenderThreadCreated) then FOnRenderThreadCreated(extraInfo);
+  if assigned(FOnRenderThreadCreated) then
+    FOnRenderThreadCreated(extraInfo);
 end;
 
 procedure TCefApplicationCore.Internal_OnWebKitInitialized;
 begin
-  if assigned(FOnWebKitInitialized) then FOnWebKitInitialized();
+  if assigned(FOnWebKitInitialized) then
+    FOnWebKitInitialized();
 end;
 
 procedure TCefApplicationCore.Internal_OnBrowserCreated(const browser: ICefBrowser; const extra_info: ICefDictionaryValue);
 begin
-  if assigned(FOnBrowserCreated) then FOnBrowserCreated(browser, extra_info);
+  if assigned(FOnBrowserCreated) then
+    FOnBrowserCreated(browser, extra_info);
 end;
 
 procedure TCefApplicationCore.Internal_OnBrowserDestroyed(const browser: ICefBrowser);
 begin
-  if assigned(FOnBrowserDestroyed) then FOnBrowserDestroyed(browser);
+  if assigned(FOnBrowserDestroyed) then
+    FOnBrowserDestroyed(browser);
 end;
 
 procedure TCefApplicationCore.Internal_OnContextCreated(const browser: ICefBrowser; const frame: ICefFrame; const context: ICefv8Context);
 begin
-  if assigned(FOnContextCreated) then FOnContextCreated(browser, frame, context);
+  if assigned(FOnContextCreated) then
+    FOnContextCreated(browser, frame, context);
 end;
 
 procedure TCefApplicationCore.Internal_OnContextReleased(const browser: ICefBrowser; const frame: ICefFrame; const context: ICefv8Context);
 begin
-  if assigned(FOnContextReleased) then FOnContextReleased(browser, frame, context);
+  if assigned(FOnContextReleased) then
+    FOnContextReleased(browser, frame, context);
 end;
 
 procedure TCefApplicationCore.Internal_OnUncaughtException(const browser: ICefBrowser; const frame: ICefFrame; const context: ICefv8Context; const exception: ICefV8Exception; const stackTrace: ICefV8StackTrace);
 begin
-  if assigned(FOnUncaughtException) then FOnUncaughtException(browser, frame, context, exception, stackTrace);
+  if assigned(FOnUncaughtException) then
+    FOnUncaughtException(browser, frame, context, exception, stackTrace);
 end;
 
 procedure TCefApplicationCore.Internal_OnFocusedNodeChanged(const browser: ICefBrowser; const frame: ICefFrame; const node: ICefDomNode);
 begin
-  if assigned(FOnFocusedNodeChanged) then FOnFocusedNodeChanged(browser, frame, node);
+  if assigned(FOnFocusedNodeChanged) then
+    FOnFocusedNodeChanged(browser, frame, node);
 end;
 
 procedure TCefApplicationCore.Internal_OnProcessMessageReceived(const browser: ICefBrowser; const frame: ICefFrame; sourceProcess: TCefProcessId; const aMessage: ICefProcessMessage; var aHandled : boolean);
@@ -1509,237 +1590,341 @@ end;
 
 procedure TCefApplicationCore.Internal_OnCDMRegistrationComplete(result : TCefCDMRegistrationError; const error_message : ustring);
 begin
-  if assigned(FOnCDMRegistrationComplete) then FOnCDMRegistrationComplete(result, error_message);
+  if assigned(FOnCDMRegistrationComplete) then
+    FOnCDMRegistrationComplete(result, error_message);
 end;
 
 procedure TCefApplicationCore.Internal_OnLoadingStateChange(const browser: ICefBrowser; isLoading, canGoBack, canGoForward: Boolean);
 begin
-  if assigned(FOnLoadingStateChange) then FOnLoadingStateChange(browser, isLoading, canGoBack, canGoForward);
+  if assigned(FOnLoadingStateChange) then
+    FOnLoadingStateChange(browser, isLoading, canGoBack, canGoForward);
 end;
 
 procedure TCefApplicationCore.Internal_OnLoadStart(const browser: ICefBrowser; const frame: ICefFrame; transitionType: TCefTransitionType);
 begin
-  if assigned(FOnLoadStart) then FOnLoadStart(browser, frame, transitionType);
+  if assigned(FOnLoadStart) then
+    FOnLoadStart(browser, frame, transitionType);
 end;
 
 procedure TCefApplicationCore.Internal_OnLoadEnd(const browser: ICefBrowser; const frame: ICefFrame; httpStatusCode: Integer);
 begin
-  if assigned(FOnLoadEnd) then FOnLoadEnd(browser, frame, httpStatusCode);
+  if assigned(FOnLoadEnd) then
+    FOnLoadEnd(browser, frame, httpStatusCode);
 end;
 
 procedure TCefApplicationCore.Internal_OnLoadError(const browser: ICefBrowser; const frame: ICefFrame; errorCode: Integer; const errorText, failedUrl: ustring);
 begin
-  if assigned(FOnLoadError) then FOnLoadError(browser, frame, errorCode, errorText, failedUrl);
+  if assigned(FOnLoadError) then
+    FOnLoadError(browser, frame, errorCode, errorText, failedUrl);
 end;
 
-procedure TCefApplicationCore.Internal_OnBeforeCommandLineProcessing(const processType : ustring;
-                                                                 const commandLine : ICefCommandLine);
+procedure TCefApplicationCore.AppendSwitch(var aKeys, aValues : TStringList; const aNewKey, aNewValue : ustring);
+var
+  TempKey : ustring;
+  i : integer;
+begin
+  if (copy(aNewKey, 1, 2) = '--') then
+    TempKey := copy(aNewKey, 3, length(aNewKey))
+   else
+    TempKey := aNewKey;
+
+  i := aKeys.IndexOf(TempKey);
+
+  if (i < 0) then
+    begin
+      aKeys.Add(aNewKey);
+      aValues.Add(aNewValue);
+    end
+   else
+    if (length(aNewValue) > 0) then
+      begin
+        if (length(aValues[i]) > 0) then
+          aValues[i] := aValues[i] + ',' + aNewValue
+         else
+          aValues[i] := aNewValue;
+      end;
+end;
+
+procedure TCefApplicationCore.ReplaceSwitch(var aKeys, aValues : TStringList; const aNewKey, aNewValue : ustring);
+var
+  TempKey : ustring;
+  i : integer;
+begin
+  if (copy(aNewKey, 1, 2) = '--') then
+    TempKey := copy(aNewKey, 3, length(aNewKey))
+   else
+    TempKey := aNewKey;
+
+  i := aKeys.IndexOf(TempKey);
+
+  if (i < 0) then
+    begin
+      aKeys.Add(aNewKey);
+      aValues.Add(aNewValue);
+    end
+   else
+    aValues[i] := aNewValue;
+end;
+
+procedure TCefApplicationCore.AddCustomCommandLineSwitches(var aKeys, aValues : TStringList);
 var
   i : integer;
   {$IFDEF MSWINDOWS}
   TempVersionInfo : TFileVersionInfo;
-  TempFileName : string;
+  TempFileName : ustring;
   {$ENDIF}
 begin
-  if (commandLine <> nil) and (FProcessType = ptBrowser) and (processType = '') then
+  {$IFDEF MSWINDOWS}
+  if FindFlashDLL(TempFileName) and
+     GetDLLVersion(TempFileName, TempVersionInfo) then
     begin
-      {$IFDEF MSWINDOWS}
-      if FindFlashDLL(TempFileName) and
-         GetDLLVersion(TempFileName, TempVersionInfo) then
-        begin
-          if FEnableGPU then commandLine.AppendSwitch('--enable-gpu-plugin');
+      if FEnableGPU then ReplaceSwitch(aKeys, aValues, '--enable-gpu-plugin');
 
-          commandLine.AppendSwitch('--enable-accelerated-plugins');
-          commandLine.AppendSwitchWithValue('--ppapi-flash-path',    TempFileName);
-          commandLine.AppendSwitchWithValue('--ppapi-flash-version', FileVersionInfoToString(TempVersionInfo));
-        end
-       else
-       {$ENDIF}
-        if FFlashEnabled then
-          begin
-            if FEnableGPU then commandLine.AppendSwitch('--enable-gpu-plugin');
+      ReplaceSwitch(aKeys, aValues, '--enable-accelerated-plugins');
+      ReplaceSwitch(aKeys, aValues, '--ppapi-flash-path', TempFileName);
+      ReplaceSwitch(aKeys, aValues, '--ppapi-flash-version', FileVersionInfoToString(TempVersionInfo));
+    end
+   else
+   {$ENDIF}
+    if FFlashEnabled then
+      begin
+        if FEnableGPU then ReplaceSwitch(aKeys, aValues, '--enable-gpu-plugin');
 
-            commandLine.AppendSwitch('--enable-accelerated-plugins');
-            commandLine.AppendSwitch('--enable-system-flash');
-          end;
-
-      commandLine.AppendSwitchWithValue('--enable-media-stream', IntToStr(Ord(FEnableMediaStream)));
-      commandLine.AppendSwitchWithValue('--enable-speech-input', IntToStr(Ord(FEnableSpeechInput)));
-
-      if FUseFakeUIForMediaStream then
-        commandLine.AppendSwitch('--use-fake-ui-for-media-stream');
-
-      if not(FEnableGPU) then
-        begin
-          commandLine.AppendSwitch('--disable-gpu');
-          commandLine.AppendSwitch('--disable-gpu-compositing');
-        end;
-
-      if FSingleProcess then
-        commandLine.AppendSwitch('--single-process');
-
-      case FSmoothScrolling of
-        STATE_ENABLED  : commandLine.AppendSwitch('--enable-smooth-scrolling');
-        STATE_DISABLED : commandLine.AppendSwitch('--disable-smooth-scrolling');
+        ReplaceSwitch(aKeys, aValues, '--enable-accelerated-plugins');
+        ReplaceSwitch(aKeys, aValues, '--enable-system-flash');
       end;
 
-      case FTouchEvents of
-        STATE_ENABLED  : commandLine.AppendSwitchWithValue('--touch-events', 'enabled');
-        STATE_DISABLED : commandLine.AppendSwitchWithValue('--touch-events', 'disabled');
-      end;
+  ReplaceSwitch(aKeys, aValues, '--enable-media-stream', IntToStr(Ord(FEnableMediaStream)));
+  ReplaceSwitch(aKeys, aValues, '--enable-speech-input', IntToStr(Ord(FEnableSpeechInput)));
 
-      if FDisableReadingFromCanvas then
-        commandLine.AppendSwitch('--disable-reading-from-canvas');
+  if FUseFakeUIForMediaStream then
+    ReplaceSwitch(aKeys, aValues, '--use-fake-ui-for-media-stream');
 
-      if not(FHyperlinkAuditing) then
-        commandLine.AppendSwitch('--no-pings');
+  if not(FEnableGPU) then
+    begin
+      ReplaceSwitch(aKeys, aValues, '--disable-gpu');
+      ReplaceSwitch(aKeys, aValues, '--disable-gpu-compositing');
+    end;
 
-      case FAutoplayPolicy of
-        appDocumentUserActivationRequired    :
-          commandLine.AppendSwitchWithValue('--autoplay-policy', 'document-user-activation-required');
+  if FSingleProcess then
+    ReplaceSwitch(aKeys, aValues, '--single-process');
 
-        appNoUserGestureRequired             :
-          commandLine.AppendSwitchWithValue('--autoplay-policy', 'no-user-gesture-required');
+  case FSmoothScrolling of
+    STATE_ENABLED  : ReplaceSwitch(aKeys, aValues, '--enable-smooth-scrolling');
+    STATE_DISABLED : ReplaceSwitch(aKeys, aValues, '--disable-smooth-scrolling');
+  end;
 
-        appUserGestureRequired               :
-          commandLine.AppendSwitchWithValue('--autoplay-policy', 'user-gesture-required');
-      end;
+  case FTouchEvents of
+    STATE_ENABLED  : ReplaceSwitch(aKeys, aValues, '--touch-events', 'enabled');
+    STATE_DISABLED : ReplaceSwitch(aKeys, aValues, '--touch-events', 'disabled');
+  end;
 
-      if FFastUnload then
-        commandLine.AppendSwitch('--enable-fast-unload');
+  if FDisableReadingFromCanvas then
+    ReplaceSwitch(aKeys, aValues, '--disable-reading-from-canvas');
 
-      if FDisableGPUCache then
-        commandLine.AppendSwitch('--disable-gpu-shader-disk-cache');
+  if not(FHyperlinkAuditing) then
+    ReplaceSwitch(aKeys, aValues, '--no-pings');
 
-      if FDisableSafeBrowsing then
+  case FAutoplayPolicy of
+    appDocumentUserActivationRequired    :
+      ReplaceSwitch(aKeys, aValues, '--autoplay-policy', 'document-user-activation-required');
+
+    appNoUserGestureRequired             :
+      ReplaceSwitch(aKeys, aValues, '--autoplay-policy', 'no-user-gesture-required');
+
+    appUserGestureRequired               :
+      ReplaceSwitch(aKeys, aValues, '--autoplay-policy', 'user-gesture-required');
+  end;
+
+  if FFastUnload then
+    ReplaceSwitch(aKeys, aValues, '--enable-fast-unload');
+
+  if FDisableGPUCache then
+    ReplaceSwitch(aKeys, aValues, '--disable-gpu-shader-disk-cache');
+
+  if FDisableSafeBrowsing then
+    begin
+      ReplaceSwitch(aKeys, aValues, '--disable-client-side-phishing-detection');
+      ReplaceSwitch(aKeys, aValues, '--safebrowsing-disable-auto-update');
+      ReplaceSwitch(aKeys, aValues, '--safebrowsing-disable-download-protection');
+    end;
+
+  if FMuteAudio then
+    ReplaceSwitch(aKeys, aValues, '--mute-audio');
+
+  if FDisableWebSecurity then
+    ReplaceSwitch(aKeys, aValues, '--disable-web-security');
+
+  if FDisablePDFExtension then
+    ReplaceSwitch(aKeys, aValues, '--disable-pdf-extension');
+
+  if FDisableSiteIsolationTrials then
+    ReplaceSwitch(aKeys, aValues, '--disable-site-isolation-trials');
+
+  if FSitePerProcess then
+    ReplaceSwitch(aKeys, aValues, '--site-per-process');
+
+  if FDisableExtensions then
+    ReplaceSwitch(aKeys, aValues, '--disable-extensions');
+
+  if FDisableBackgroundNetworking then
+    ReplaceSwitch(aKeys, aValues, '--disable-background-networking');
+
+  if FMetricsRecordingOnly then
+    ReplaceSwitch(aKeys, aValues, '--metrics-recording-only');
+
+  if FAllowFileAccessFromFiles then
+    ReplaceSwitch(aKeys, aValues, '--allow-file-access-from-files');
+
+  if FAllowRunningInsecureContent then
+    ReplaceSwitch(aKeys, aValues, '--allow-running-insecure-content');
+
+  if FEnablePrintPreview then
+    ReplaceSwitch(aKeys, aValues, '--enable-print-preview');
+
+  if FDisableNewBrowserInfoTimeout then
+    ReplaceSwitch(aKeys, aValues, '--disable-new-browser-info-timeout');
+
+  if (length(FDevToolsProtocolLogFile) > 0) then
+    ReplaceSwitch(aKeys, aValues, '--devtools-protocol-log-file', FDevToolsProtocolLogFile);
+
+  case FPluginPolicy of
+    PLUGIN_POLICY_SWITCH_DETECT : ReplaceSwitch(aKeys, aValues, '--plugin-policy', 'detect');
+    PLUGIN_POLICY_SWITCH_BLOCK  : ReplaceSwitch(aKeys, aValues, '--plugin-policy', 'block');
+  end;
+
+  if (length(FDefaultEncoding) > 0) then
+    ReplaceSwitch(aKeys, aValues, '--default-encoding', FDefaultEncoding);
+
+  if FDisableJavascript then
+    ReplaceSwitch(aKeys, aValues, '--disable-javascript');
+
+  if FDisableJavascriptCloseWindows then
+    ReplaceSwitch(aKeys, aValues, '--disable-javascript-close-windows');
+
+  if FDisableJavascriptAccessClipboard then
+    ReplaceSwitch(aKeys, aValues, '--disable-javascript-access-clipboard');
+
+  if FDisableJavascriptDomPaste then
+    ReplaceSwitch(aKeys, aValues, '--disable-javascript-dom-paste');
+
+  if FAllowUniversalAccessFromFileUrls then
+    ReplaceSwitch(aKeys, aValues, '--allow-universal-access-from-files');
+
+  if FDisableImageLoading then
+    ReplaceSwitch(aKeys, aValues, '--disable-image-loading');
+
+  if FImageShrinkStandaloneToFit then
+    ReplaceSwitch(aKeys, aValues, '--image-shrink-standalone-to-fit');
+
+  if FDisableTextAreaResize then
+    ReplaceSwitch(aKeys, aValues, '--disable-text-area-resize');
+
+  if FDisableTabToLinks then
+    ReplaceSwitch(aKeys, aValues, '--disable-tab-to-links');
+
+  if FDisablePlugins then
+    ReplaceSwitch(aKeys, aValues, '--disable-plugins');
+
+  if FEnableProfanityFilter then
+    ReplaceSwitch(aKeys, aValues, '--enable-profanity-filter');
+
+  if FDisableSpellChecking then
+    ReplaceSwitch(aKeys, aValues, '--disable-spell-checking');
+
+  if (length(FOverrideSpellCheckLang) > 0) then
+    ReplaceSwitch(aKeys, aValues, '--override-spell-check-lang', FOverrideSpellCheckLang);
+
+  // The list of features you can enable is here :
+  // https://chromium.googlesource.com/chromium/src/+/master/chrome/common/chrome_features.cc
+  if (length(FEnableFeatures) > 0) then
+    AppendSwitch(aKeys, aValues, '--enable-features', FEnableFeatures);
+
+  // The list of features you can disable is here :
+  // https://chromium.googlesource.com/chromium/src/+/master/chrome/common/chrome_features.cc
+  if (length(FDisableFeatures) > 0) then
+    AppendSwitch(aKeys, aValues, '--disable-features', FDisableFeatures);
+
+  // The list of Blink features you can enable is here :
+  // https://cs.chromium.org/chromium/src/third_party/blink/renderer/platform/runtime_enabled_features.json5
+  if (length(FEnableBlinkFeatures) > 0) then
+    AppendSwitch(aKeys, aValues, '--enable-blink-features', FEnableBlinkFeatures);
+
+  // The list of Blink features you can disable is here :
+  // https://cs.chromium.org/chromium/src/third_party/blink/renderer/platform/runtime_enabled_features.json5
+  if (length(FDisableBlinkFeatures) > 0) then
+    AppendSwitch(aKeys, aValues, '--disable-blink-features', FDisableBlinkFeatures);
+
+  // https://source.chromium.org/chromium/chromium/src/+/master:base/base_switches.cc
+  if (length(FForceFieldTrials) > 0) then
+    ReplaceSwitch(aKeys, aValues, '--force-fieldtrials', FForceFieldTrials);
+
+  // https://source.chromium.org/chromium/chromium/src/+/master:components/variations/variations_switches.cc
+  if (length(FForceFieldTrialParams) > 0) then
+    ReplaceSwitch(aKeys, aValues, '--force-fieldtrial-params', FForceFieldTrialParams);
+
+  if (FCustomCommandLines       <> nil) and
+     (FCustomCommandLineValues  <> nil) and
+     (FCustomCommandLines.Count =  FCustomCommandLineValues.Count) then
+    begin
+      i := 0;
+      while (i < FCustomCommandLines.Count) do
         begin
-          commandLine.AppendSwitch('--disable-client-side-phishing-detection');
-          commandLine.AppendSwitch('--safebrowsing-disable-auto-update');
-          commandLine.AppendSwitch('--safebrowsing-disable-download-protection');
-        end;
+          if (length(FCustomCommandLines[i]) > 0) then
+            ReplaceSwitch(aKeys, aValues, FCustomCommandLines[i], FCustomCommandLineValues[i]);
 
-      if FMuteAudio then
-        commandLine.AppendSwitch('--mute-audio');
-
-      if FDisableWebSecurity then
-        commandLine.AppendSwitch('--disable-web-security');
-
-      if FDisablePDFExtension then
-        commandLine.AppendSwitch('--disable-pdf-extension');
-
-      if FSitePerProcess then
-        commandLine.AppendSwitch('--site-per-process');
-
-      if FDisableExtensions then
-        commandLine.AppendSwitch('--disable-extensions');
-
-      if FDisableBackgroundNetworking then
-        commandLine.AppendSwitch('--disable-background-networking');
-
-      if FMetricsRecordingOnly then
-        commandLine.AppendSwitch('--metrics-recording-only');
-
-      if FAllowFileAccessFromFiles then
-        commandLine.AppendSwitch('--allow-file-access-from-files');
-
-      if FAllowRunningInsecureContent then
-        commandLine.AppendSwitch('--allow-running-insecure-content');
-
-      if FEnablePrintPreview then commandLine.AppendSwitch('--enable-print-preview');
-
-      case FPluginPolicy of
-        PLUGIN_POLICY_SWITCH_DETECT : commandLine.AppendSwitchWithValue('--plugin-policy', 'detect');
-        PLUGIN_POLICY_SWITCH_BLOCK  : commandLine.AppendSwitchWithValue('--plugin-policy', 'block');
-      end;
-
-      if (length(FDefaultEncoding) > 0) then
-        commandLine.AppendSwitchWithValue('--default-encoding', FDefaultEncoding);
-
-      if FDisableJavascript then
-        commandLine.AppendSwitch('--disable-javascript');
-
-      if FDisableJavascriptCloseWindows then
-        commandLine.AppendSwitch('--disable-javascript-close-windows');
-
-      if FDisableJavascriptAccessClipboard then
-        commandLine.AppendSwitch('--disable-javascript-access-clipboard');
-
-      if FDisableJavascriptDomPaste then
-        commandLine.AppendSwitch('--disable-javascript-dom-paste');
-
-      if FAllowUniversalAccessFromFileUrls then
-        commandLine.AppendSwitch('--allow-universal-access-from-files');
-
-      if FDisableImageLoading then
-        commandLine.AppendSwitch('--disable-image-loading');
-
-      if FImageShrinkStandaloneToFit then
-        commandLine.AppendSwitch('--image-shrink-standalone-to-fit');
-
-      if FDisableTextAreaResize then
-        commandLine.AppendSwitch('--disable-text-area-resize');
-
-      if FDisableTabToLinks then
-        commandLine.AppendSwitch('--disable-tab-to-links');
-
-      if FDisablePlugins then
-        commandLine.AppendSwitch('--disable-plugins');
-
-      if FEnableProfanityFilter then
-        commandLine.AppendSwitch('--enable-profanity-filter');
-
-      if FDisableSpellChecking then
-        commandLine.AppendSwitch('--disable-spell-checking');
-
-      if (length(FOverrideSpellCheckLang) > 0) then
-        commandLine.AppendSwitchWithValue('--override-spell-check-lang', FOverrideSpellCheckLang);
-
-
-      // The list of features you can enable is here :
-      // https://chromium.googlesource.com/chromium/src/+/master/chrome/common/chrome_features.cc
-      if (length(FEnableFeatures) > 0) then
-        commandLine.AppendSwitchWithValue('--enable-features', FEnableFeatures);
-
-      // The list of features you can disable is here :
-      // https://chromium.googlesource.com/chromium/src/+/master/chrome/common/chrome_features.cc
-      if (length(FDisableFeatures) > 0) then
-        commandLine.AppendSwitchWithValue('--disable-features', FDisableFeatures);
-
-      // The list of Blink features you can enable is here :
-      // https://cs.chromium.org/chromium/src/third_party/blink/renderer/platform/runtime_enabled_features.json5
-      if (length(FEnableBlinkFeatures) > 0) then
-        commandLine.AppendSwitchWithValue('--enable-blink-features', FEnableBlinkFeatures);
-
-      // The list of Blink features you can disable is here :
-      // https://cs.chromium.org/chromium/src/third_party/blink/renderer/platform/runtime_enabled_features.json5
-      if (length(FDisableBlinkFeatures) > 0) then
-        commandLine.AppendSwitchWithValue('--disable-blink-features', FDisableBlinkFeatures);
-
-      if (FCustomCommandLines       <> nil) and
-         (FCustomCommandLineValues  <> nil) and
-         (FCustomCommandLines.Count =  FCustomCommandLineValues.Count) then
-        begin
-          i := 0;
-
-          while (i < FCustomCommandLines.Count) do
-            begin
-              if (length(FCustomCommandLines[i]) > 0) then
-                begin
-                  if (length(FCustomCommandLineValues[i]) > 0) then
-                    commandLine.AppendSwitchWithValue(FCustomCommandLines[i], FCustomCommandLineValues[i])
-                   else
-                    commandLine.AppendSwitch(FCustomCommandLines[i]);
-                end;
-
-              inc(i);
-            end;
+          inc(i);
         end;
     end;
 end;
 
+procedure TCefApplicationCore.Internal_OnBeforeCommandLineProcessing(const processType : ustring;
+                                                                     const commandLine : ICefCommandLine);
+var
+  i : integer;
+  TempKeys, TempValues : TStringList;
+begin
+  TempKeys   := nil;
+  TempValues := nil;
+
+  try
+    if (commandLine <> nil) and
+       commandLine.IsValid and
+       (FProcessType = ptBrowser) and
+       (processType = '') then
+      begin
+        TempKeys   := TStringList.Create;
+        TempValues := TStringList.Create;
+        commandLine.GetSwitches(TempKeys, TempValues);
+
+        AddCustomCommandLineSwitches(TempKeys, TempValues);
+
+        commandLine.Reset;
+
+        i := 0;
+        while (i < TempKeys.Count) do
+          begin
+            if (length(TempKeys[i]) > 0) then
+              begin
+                if (length(TempValues[i]) > 0) then
+                  commandLine.AppendSwitchWithValue(TempKeys[i], TempValues[i])
+                 else
+                  commandLine.AppendSwitch(TempKeys[i]);
+              end;
+
+            inc(i);
+          end;
+      end;
+  finally
+    if (TempKeys   <> nil) then FreeAndNil(TempKeys);
+    if (TempValues <> nil) then FreeAndNil(TempValues);
+  end;
+end;
+
 procedure TCefApplicationCore.Internal_OnRegisterCustomSchemes(const registrar: TCefSchemeRegistrarRef);
 begin
-  if assigned(FOnRegisterCustomSchemes) then FOnRegisterCustomSchemes(registrar);
+  if assigned(FOnRegisterCustomSchemes) then
+    FOnRegisterCustomSchemes(registrar);
 end;
 
 function TCefApplicationCore.GetMustCreateResourceBundleHandler : boolean;
@@ -1836,7 +2021,7 @@ begin
 {$ENDIF}
 end;
 
-function TCefApplicationCore.GetUsedMemory : cardinal;
+function TCefApplicationCore.GetUsedMemory : uint64;
 {$IFDEF MSWINDOWS}
 var
   TempHandle   : THandle;
@@ -1938,6 +2123,9 @@ end;
 function TCefApplicationCore.LoadCEFlibrary : boolean;
 var
   TempOldDir, TempString : string;
+  {$IFDEF MSWINDOWS}
+  TempError : DWORD;
+  {$ENDIF}
 begin
   Result := False;
 
@@ -1957,9 +2145,9 @@ begin
     end;
 
   {$IFDEF MSWINDOWS}
-  FLibHandle := LoadLibraryEx(PChar(LibCefPath), 0, LOAD_WITH_ALTERED_SEARCH_PATH);
+  FLibHandle := LoadLibraryExW(PWideChar(LibCefPath), 0, LOAD_WITH_ALTERED_SEARCH_PATH);
   {$ELSE}
-  FLibHandle := LoadLibrary(PChar(LibCefPath));
+  FLibHandle := LoadLibrary(LibCefPath);
   {$ENDIF}
 
   if (FLibHandle = 0) then
@@ -1967,8 +2155,10 @@ begin
       FStatus := asErrorLoadingLibrary;
 
       {$IFDEF MSWINDOWS}
+      TempError  := GetLastError;
       TempString := 'Error loading libcef.dll' + CRLF + CRLF +
-                    'Error code : 0x' + inttohex(GetLastError, 8);
+                    'Error code : 0x' + inttohex(TempError, 8) + CRLF +
+                    SysErrorMessage(TempError);
       {$ELSE}
       TempString := 'Error loading the CEF binaries';
       {$ENDIF}
@@ -1987,6 +2177,7 @@ begin
      Load_cef_file_util_capi_h and
      Load_cef_image_capi_h and
      Load_cef_menu_model_capi_h and
+     Load_cef_media_router_capi_h and
      Load_cef_origin_whitelist_capi_h and
      Load_cef_parser_capi_h and
      Load_cef_path_util_capi_h and
@@ -2146,6 +2337,13 @@ begin
   Result := assigned(cef_menu_model_create);
 end;
 
+function TCefApplicationCore.Load_cef_media_router_capi_h : boolean;
+begin
+  {$IFDEF FPC}Pointer({$ENDIF}cef_media_router_get_global{$IFDEF FPC}){$ENDIF} := GetProcAddress(FLibHandle, 'cef_media_router_get_global');
+
+  Result := assigned(cef_media_router_get_global);
+end;
+
 function TCefApplicationCore.Load_cef_origin_whitelist_capi_h : boolean;
 begin
   {$IFDEF FPC}Pointer({$ENDIF}cef_add_cross_origin_whitelist_entry{$IFDEF FPC}){$ENDIF}    := GetProcAddress(FLibHandle, 'cef_add_cross_origin_whitelist_entry');
@@ -2169,6 +2367,7 @@ begin
   {$IFDEF FPC}Pointer({$ENDIF}cef_uriencode{$IFDEF FPC}){$ENDIF}                       := GetProcAddress(FLibHandle, 'cef_uriencode');
   {$IFDEF FPC}Pointer({$ENDIF}cef_uridecode{$IFDEF FPC}){$ENDIF}                       := GetProcAddress(FLibHandle, 'cef_uridecode');
   {$IFDEF FPC}Pointer({$ENDIF}cef_parse_json{$IFDEF FPC}){$ENDIF}                      := GetProcAddress(FLibHandle, 'cef_parse_json');
+  {$IFDEF FPC}Pointer({$ENDIF}cef_parse_json_buffer{$IFDEF FPC}){$ENDIF}               := GetProcAddress(FLibHandle, 'cef_parse_json_buffer');
   {$IFDEF FPC}Pointer({$ENDIF}cef_parse_jsonand_return_error{$IFDEF FPC}){$ENDIF}      := GetProcAddress(FLibHandle, 'cef_parse_jsonand_return_error');
   {$IFDEF FPC}Pointer({$ENDIF}cef_write_json{$IFDEF FPC}){$ENDIF}                      := GetProcAddress(FLibHandle, 'cef_write_json');
 
@@ -2182,6 +2381,7 @@ begin
             assigned(cef_uriencode) and
             assigned(cef_uridecode) and
             assigned(cef_parse_json) and
+            assigned(cef_parse_json_buffer) and
             assigned(cef_parse_jsonand_return_error) and
             assigned(cef_write_json);
 end;

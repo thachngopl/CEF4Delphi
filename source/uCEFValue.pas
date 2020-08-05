@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -69,7 +69,7 @@ type
       function GetDictionary: ICefDictionaryValue;
       function GetList: ICefListValue;
       function SetNull: Boolean;
-      function SetBool(value: Integer): Boolean;
+      function SetBool(value: boolean): Boolean;
       function SetInt(value: Integer): Boolean;
       function SetDouble(value: Double): Boolean;
       function SetString(const value: ustring): Boolean;
@@ -167,9 +167,9 @@ begin
   Result := PCefValue(FData)^.set_binary(PCefValue(FData), CefGetData(value)) <> 0;
 end;
 
-function TCefValueRef.SetBool(value: Integer): Boolean;
+function TCefValueRef.SetBool(value: boolean): Boolean;
 begin
-  Result := PCefValue(FData)^.set_bool(PCefValue(FData), value) <> 0;
+  Result := PCefValue(FData)^.set_bool(PCefValue(FData), ord(value)) <> 0;
 end;
 
 function TCefValueRef.SetDictionary(const value: ICefDictionaryValue): Boolean;

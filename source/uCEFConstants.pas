@@ -10,7 +10,7 @@
 // For more information about CEF4Delphi visit :
 //         https://www.briskbard.com/index.php?lang=en&pageid=cef
 //
-//        Copyright © 2019 Salvador Diaz Fau. All rights reserved.
+//        Copyright © 2020 Salvador Diaz Fau. All rights reserved.
 //
 // ************************************************************************
 // ************ vvvv Original license and comments below vvvv *************
@@ -48,12 +48,14 @@ unit uCEFConstants;
 
 interface
 
+{$IFDEF MSWINDOWS}
 uses
   {$IFDEF DELPHI16_UP}
   Winapi.Messages;
   {$ELSE}
   Messages;
   {$ENDIF}
+{$ENDIF}
 
 const
   // Error list defined in /include/internal/cef_types.h (cef_errorcode_t)
@@ -334,6 +336,7 @@ const
   TT_SOURCE_MASK          = $000000FF;
   TT_BLOCKED_FLAG         = $00800000;
   TT_FORWARD_BACK_FLAG    = $01000000;
+  TT_DIRECT_LOAD_FLAG     = $02000000;
   TT_CHAIN_START_FLAG     = $10000000;
   TT_CHAIN_END_FLAG       = $20000000;
   TT_CLIENT_REDIRECT_FLAG = $40000000;
@@ -395,6 +398,7 @@ const
   EVENTFLAG_IS_KEY_PAD           = 1 shl 9;
   EVENTFLAG_IS_LEFT              = 1 shl 10;
   EVENTFLAG_IS_RIGHT             = 1 shl 11;
+  EVENTFLAG_ALTGR_DOWN           = 1 shl 12;
 
   // /include/internal/cef_types.h (cef_drag_operations_mask_t)
   DRAG_OPERATION_NONE     = 0;
@@ -421,8 +425,7 @@ const
   UU_SPACES                                   = 1 shl 1;
   UU_PATH_SEPARATORS                          = 1 shl 2;
   UU_URL_SPECIAL_CHARS_EXCEPT_PATH_SEPARATORS = 1 shl 3;
-  UU_SPOOFING_AND_CONTROL_CHARS               = 1 shl 4;
-  UU_REPLACE_PLUS_WITH_SPACE                  = 1 shl 5;
+  UU_REPLACE_PLUS_WITH_SPACE                  = 1 shl 4;
 
   // /include/internal/cef_types.h (cef_menu_id_t)
   MENU_ID_BACK                       = 100;
@@ -523,6 +526,31 @@ const
   DUPLEX_MODE_LONG_EDGE  = 1;
   DUPLEX_MODE_SHORT_EDGE = 2;
 
+  // /include/internal/cef_types.h (cef_media_route_create_result_t)
+  CEF_MRCR_UNKNOWN_ERROR         = 0;
+  CEF_MRCR_OK                    = 1;
+  CEF_MRCR_TIMED_OUT             = 2;
+  CEF_MRCR_ROUTE_NOT_FOUND       = 3;
+  CEF_MRCR_SINK_NOT_FOUND        = 4;
+  CEF_MRCR_INVALID_ORIGIN        = 5;
+  CEF_MRCR_NO_SUPPORTED_PROVIDER = 7;
+  CEF_MRCR_CANCELLED             = 8;
+  CEF_MRCR_ROUTE_ALREADY_EXISTS  = 9;
+  CEF_MRCR_TOTAL_COUNT           = 11;
+
+  // /include/internal/cef_types.h (cef_cookie_priority_t)
+  CEF_COOKIE_PRIORITY_LOW    = -1;
+  CEF_COOKIE_PRIORITY_MEDIUM = 0;
+  CEF_COOKIE_PRIORITY_HIGH   = 1;
+
+  // /include/internal/cef_types.h (cef_text_field_commands_t)
+  CEF_TFC_CUT        = 1;
+  CEF_TFC_COPY       = 2;
+  CEF_TFC_PASTE      = 3;
+  CEF_TFC_UNDO       = 4;
+  CEF_TFC_DELETE     = 5;
+  CEF_TFC_SELECT_ALL = 6;
+
 
 //******************************************************
 //****************** OTHER CONSTANTS *******************
@@ -544,6 +572,10 @@ const
   CEF_MAX_CONNECTIONS_PER_PROXY_DEFAULT_VALUE = 32;
   CEF_MAX_CONNECTIONS_PER_PROXY_MIN_VALUE     = 7;
   CEF_MAX_CONNECTIONS_PER_PROXY_MAX_VALUE     = 99;
+
+  CEF_COOKIE_PREF_DEFAULT = 0;
+  CEF_COOKIE_PREF_ALLOW   = 1;
+  CEF_COOKIE_PREF_BLOCK   = 2;
 
   // https://chromium.googlesource.com/chromium/src/+/refs/tags/77.0.3865.90/chrome/common/net/safe_search_util.h (YouTubeRestrictMode)
   // https://www.chromium.org/administrators/policy-list-3#ForceYouTubeRestrict
@@ -567,24 +599,38 @@ const
   ZOOM_STEP_300 = 13;
   ZOOM_STEP_400 = 14;
   ZOOM_STEP_500 = 15;
+  ZOOM_STEP_UNK = 16;
   ZOOM_STEP_MIN = ZOOM_STEP_25;
   ZOOM_STEP_MAX = ZOOM_STEP_500;
   ZOOM_STEP_DEF = ZOOM_STEP_100;
 
-  {$IFDEF MSWINDOWS}
-  CEF_PREFERENCES_SAVED  = WM_APP + $A00;
-  CEF_DOONCLOSE          = WM_APP + $A01;
-  CEF_STARTDRAGGING      = WM_APP + $A02;
-  CEF_AFTERCREATED       = WM_APP + $A03;
-  CEF_PENDINGRESIZE      = WM_APP + $A04;
-  CEF_PUMPHAVEWORK       = WM_APP + $A05;
-  CEF_DESTROY            = WM_APP + $A06;
-  CEF_DOONBEFORECLOSE    = WM_APP + $A07;   
-  CEF_PENDINGINVALIDATE  = WM_APP + $A08;
-  CEF_IMERANGECHANGED    = WM_APP + $A09;
-  CEF_SENTINEL_START     = WM_APP + $A0A;
-  CEF_SENTINEL_DOCLOSE   = WM_APP + $A0B;
-  {$ENDIF}
+  ZOOM_PCT_DELTA = 5;
+
+  ZoomStepValues : array[ZOOM_STEP_MIN..ZOOM_STEP_MAX] of integer = (25, 33, 50, 67, 75, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500);
+
+  CEF_PREFERENCES_SAVED  = {$IFDEF MSWINDOWS}WM_APP +{$ENDIF} $A00;
+  CEF_DOONCLOSE          = {$IFDEF MSWINDOWS}WM_APP +{$ENDIF} $A01;
+  CEF_STARTDRAGGING      = {$IFDEF MSWINDOWS}WM_APP +{$ENDIF} $A02;
+  CEF_AFTERCREATED       = {$IFDEF MSWINDOWS}WM_APP +{$ENDIF} $A03;
+  CEF_PENDINGRESIZE      = {$IFDEF MSWINDOWS}WM_APP +{$ENDIF} $A04;
+  CEF_PUMPHAVEWORK       = {$IFDEF MSWINDOWS}WM_APP +{$ENDIF} $A05;
+  CEF_DESTROY            = {$IFDEF MSWINDOWS}WM_APP +{$ENDIF} $A06;
+  CEF_DOONBEFORECLOSE    = {$IFDEF MSWINDOWS}WM_APP +{$ENDIF} $A07;
+  CEF_PENDINGINVALIDATE  = {$IFDEF MSWINDOWS}WM_APP +{$ENDIF} $A08;
+  CEF_IMERANGECHANGED    = {$IFDEF MSWINDOWS}WM_APP +{$ENDIF} $A09;
+  CEF_SENTINEL_START     = {$IFDEF MSWINDOWS}WM_APP +{$ENDIF} $A0A;
+  CEF_SENTINEL_DOCLOSE   = {$IFDEF MSWINDOWS}WM_APP +{$ENDIF} $A0B;
+  CEF_BEFORECLOSE        = {$IFDEF MSWINDOWS}WM_APP +{$ENDIF} $A0C;
+
+  // Lazarus and some old Delphi versions don't have these message contants
+  {$IF NOT DECLARED(WM_TOUCH)}
+  WM_TOUCH                 = $0240;
+  {$IFEND}
+  {$IF NOT DECLARED(WM_POINTERUPDATE)}
+  WM_POINTERUPDATE         = $0245;
+  WM_POINTERDOWN           = $0246;
+  WM_POINTERUP             = $0247;
+  {$IFEND}
 
   CEF_TIMER_MINIMUM            = $0000000A;
   CEF_TIMER_MAXIMUM            = $7FFFFFFF;
@@ -600,6 +646,10 @@ const
   // We have to add "CEF_" to be compatible with C++ Builder.
   CEF_IMAGE_FILE_MACHINE_I386  = $014C;
   CEF_IMAGE_FILE_MACHINE_AMD64 = $8664;
+
+  {$IF NOT DECLARED(USER_DEFAULT_SCREEN_DPI)}
+  USER_DEFAULT_SCREEN_DPI = 96;
+  {$IFEND}
 
 implementation
 

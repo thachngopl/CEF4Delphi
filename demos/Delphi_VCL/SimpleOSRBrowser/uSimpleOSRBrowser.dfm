@@ -33,7 +33,7 @@ object Form1: TForm1
     Padding.Right = 5
     Padding.Bottom = 5
     TabOrder = 0
-    object ComboBox1: TComboBox
+    object AddressCb: TComboBox
       Left = 5
       Top = 5
       Width = 907
@@ -42,7 +42,7 @@ object Form1: TForm1
       ItemIndex = 0
       TabOrder = 0
       Text = 'https://www.google.com'
-      OnEnter = ComboBox1Enter
+      OnEnter = AddressCbEnter
       Items.Strings = (
         'https://www.google.com'
         'https://html5demos.com/drag'
@@ -109,6 +109,10 @@ object Form1: TForm1
     OnIMECancelComposition = Panel1IMECancelComposition
     OnIMECommitText = Panel1IMECommitText
     OnIMESetComposition = Panel1IMESetComposition
+    OnCustomTouch = Panel1CustomTouch
+    OnPointerDown = Panel1PointerDown
+    OnPointerUp = Panel1PointerUp
+    OnPointerUpdate = Panel1PointerUpdate
     OnPaintParentBkg = Panel1PaintParentBkg
     Align = alClient
     Ctl3D = False
@@ -159,10 +163,5 @@ object Form1: TForm1
     OnTimer = Timer1Timer
     Left = 24
     Top = 206
-  end
-  object CEFSentinel1: TCEFSentinel
-    OnClose = CEFSentinel1Close
-    Left = 24
-    Top = 350
   end
 end
