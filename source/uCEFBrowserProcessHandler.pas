@@ -49,16 +49,24 @@ unit uCEFBrowserProcessHandler;
 interface
 
 uses
+  {$IFDEF DELPHI16_UP}
+  System.Classes,
+  {$ELSE}
+  Classes,
+  {$ENDIF}
   uCEFBaseRefCounted, uCEFInterfaces, uCEFTypes, uCEFApplicationCore;
 
 type
   TCefBrowserProcessHandlerOwn = class(TCefBaseRefCountedOwn, ICefBrowserProcessHandler)
     protected
+      procedure GetCookieableSchemes(var schemes: TStringList; var include_defaults : boolean); virtual; abstract;
       procedure OnContextInitialized; virtual; abstract;
       procedure OnBeforeChildProcessLaunch(const commandLine: ICefCommandLine); virtual; abstract;
-      procedure OnRenderProcessThreadCreated(const extraInfo: ICefListValue); virtual; abstract;
       procedure GetPrintHandler(var aHandler : ICefPrintHandler); virtual;
       procedure OnScheduleMessagePumpWork(const delayMs: Int64); virtual; abstract;
+      procedure GetDefaultClient(var aClient : ICefClient); virtual;
+
+      procedure RemoveReferences; virtual; abstract;
 
     public
       constructor Create; virtual;
@@ -68,10 +76,13 @@ type
     protected
       FCefApp : TCefApplicationCore;
 
+      procedure GetCookieableSchemes(var schemes: TStringList; var include_defaults : boolean); override;
       procedure OnContextInitialized; override;
       procedure OnBeforeChildProcessLaunch(const commandLine: ICefCommandLine); override;
-      procedure OnRenderProcessThreadCreated(const extraInfo: ICefListValue); override;
       procedure OnScheduleMessagePumpWork(const delayMs: Int64); override;
+      procedure GetDefaultClient(var aClient : ICefClient); override;
+
+      procedure RemoveReferences; override;
 
     public
       constructor Create(const aCefApp : TCefApplicationCore); reintroduce;
@@ -86,7 +97,46 @@ uses
   {$ELSE}
   SysUtils,
   {$ENDIF}
-  uCEFMiscFunctions, uCEFLibFunctions, uCEFCommandLine, uCEFListValue, uCEFConstants;
+  uCEFMiscFunctions, uCEFLibFunctions, uCEFCommandLine, uCEFListValue, uCEFConstants, uCEFStringList;
+
+procedure cef_browser_process_handler_get_cookieable_schemes(self             : PCefBrowserProcessHandler;
+                                                             schemes          : TCefStringList;
+                                                             include_defaults : PInteger); stdcall;
+var
+  TempSL     : TStringList;
+  TempCefSL  : ICefStringList;
+  TempObject : TObject;
+  TempIncDef : boolean;
+begin
+  TempSL := nil;
+
+  try
+    try
+      TempObject := CefGetObject(self);
+
+      if (schemes <> nil) and (TempObject <> nil) and (TempObject is TCefBrowserProcessHandlerOwn) then
+        begin
+          TempIncDef := (include_defaults^ <> 0);
+          TempSL     := TStringList.Create;
+          TempCefSL  := TCefStringListRef.Create(schemes);
+          TempCefSL.CopyToStrings(TempSL);
+
+          TCefBrowserProcessHandlerOwn(TempObject).GetCookieableSchemes(TempSL, TempIncDef);
+
+          TempCefSL.Clear;
+          TempCefSL.AddStrings(TempSL);
+
+          include_defaults^ := ord(TempIncDef);
+        end;
+    except
+      on e : exception do
+        if CustomExceptionHandler('cef_browser_process_handler_get_cookieable_schemes', e) then raise;
+    end;
+  finally
+    if (TempSL <> nil) then FreeAndNil(TempSL);
+    TempCefSL := nil;
+  end;
+end;
 
 procedure cef_browser_process_handler_on_context_initialized(self: PCefBrowserProcessHandler); stdcall;
 var
@@ -94,7 +144,8 @@ var
 begin
   TempObject := CefGetObject(self);
 
-  if (TempObject <> nil) and (TempObject is TCefBrowserProcessHandlerOwn) then
+  if (TempObject <> nil) and
+     (TempObject is TCefBrowserProcessHandlerOwn) then
     TCefBrowserProcessHandlerOwn(TempObject).OnContextInitialized;
 end;
 
@@ -105,19 +156,9 @@ var
 begin
   TempObject := CefGetObject(self);
 
-  if (TempObject <> nil) and (TempObject is TCefBrowserProcessHandlerOwn) then
+  if (TempObject <> nil) and
+     (TempObject is TCefBrowserProcessHandlerOwn) then
     TCefBrowserProcessHandlerOwn(TempObject).OnBeforeChildProcessLaunch(TCefCommandLineRef.UnWrap(command_line));
-end;
-
-procedure cef_browser_process_handler_on_render_process_thread_created(self       : PCefBrowserProcessHandler;
-                                                                       extra_info : PCefListValue); stdcall;
-var
-  TempObject : TObject;
-begin
-  TempObject := CefGetObject(self);
-
-  if (TempObject <> nil) and (TempObject is TCefBrowserProcessHandlerOwn) then
-    TCefBrowserProcessHandlerOwn(TempObject).OnRenderProcessThreadCreated(TCefListValueRef.UnWrap(extra_info));
 end;
 
 function cef_browser_process_handler_get_print_handler(self: PCefBrowserProcessHandler): PCefPrintHandler; stdcall;
@@ -128,8 +169,10 @@ begin
   Result     := nil;
   TempObject := CefGetObject(self);
 
-  if (TempObject <> nil) and (TempObject is TCefBrowserProcessHandlerOwn) then
+  if (TempObject <> nil) and
+     (TempObject is TCefBrowserProcessHandlerOwn) then
     try
+      TempHandler := nil;
       TCefBrowserProcessHandlerOwn(TempObject).GetPrintHandler(TempHandler);
       if (TempHandler <> nil) then Result := TempHandler.Wrap;
     finally
@@ -144,8 +187,28 @@ var
 begin
   TempObject := CefGetObject(self);
 
-  if (TempObject <> nil) and (TempObject is TCefBrowserProcessHandlerOwn) then
+  if (TempObject <> nil) and
+     (TempObject is TCefBrowserProcessHandlerOwn) then
     TCefBrowserProcessHandlerOwn(TempObject).OnScheduleMessagePumpWork(delay_ms);
+end;
+
+function cef_browser_process_handler_get_default_client(self: PCefBrowserProcessHandler): PCefClient; stdcall;
+var
+  TempObject : TObject;
+  TempClient : ICefClient;
+begin
+  Result     := nil;
+  TempObject := CefGetObject(self);
+
+  if (TempObject <> nil) and
+     (TempObject is TCefBrowserProcessHandlerOwn) then
+    try
+      TempClient := nil;
+      TCefBrowserProcessHandlerOwn(TempObject).GetDefaultClient(TempClient);
+      if (TempClient <> nil) then Result := TempClient.Wrap;
+    finally
+      TempClient := nil;
+    end;
 end;
 
 constructor TCefBrowserProcessHandlerOwn.Create;
@@ -154,17 +217,23 @@ begin
 
   with PCefBrowserProcessHandler(FData)^ do
     begin
+      get_cookieable_schemes           := {$IFDEF FPC}@{$ENDIF}cef_browser_process_handler_get_cookieable_schemes;
       on_context_initialized           := {$IFDEF FPC}@{$ENDIF}cef_browser_process_handler_on_context_initialized;
       on_before_child_process_launch   := {$IFDEF FPC}@{$ENDIF}cef_browser_process_handler_on_before_child_process_launch;
-      on_render_process_thread_created := {$IFDEF FPC}@{$ENDIF}cef_browser_process_handler_on_render_process_thread_created;
       get_print_handler                := {$IFDEF FPC}@{$ENDIF}cef_browser_process_handler_get_print_handler;
       on_schedule_message_pump_work    := {$IFDEF FPC}@{$ENDIF}cef_browser_process_handler_on_schedule_message_pump_work;
+      get_default_client               := {$IFDEF FPC}@{$ENDIF}cef_browser_process_handler_get_default_client;
     end;
 end;
 
 procedure TCefBrowserProcessHandlerOwn.GetPrintHandler(var aHandler : ICefPrintHandler);
 begin
   aHandler := nil; // only linux
+end;
+
+procedure TCefBrowserProcessHandlerOwn.GetDefaultClient(var aClient : ICefClient);
+begin
+  aClient := nil;
 end;
 
 
@@ -180,11 +249,27 @@ end;
 
 destructor TCefCustomBrowserProcessHandler.Destroy;
 begin
-  FCefApp := nil;
+  RemoveReferences;
 
   inherited Destroy;
 end;
 
+procedure TCefCustomBrowserProcessHandler.RemoveReferences;
+begin
+  FCefApp := nil;
+end;
+
+procedure TCefCustomBrowserProcessHandler.GetCookieableSchemes(var schemes          : TStringList;
+                                                               var include_defaults : boolean);
+begin
+  try
+    if (FCefApp <> nil) then FCefApp.Internal_GetCookieableSchemes(schemes, include_defaults);
+  except
+    on e : exception do
+      if CustomExceptionHandler('TCefCustomBrowserProcessHandler.GetCookieableSchemes', e) then raise;
+  end;
+end;
+
 procedure TCefCustomBrowserProcessHandler.OnContextInitialized;
 begin
   try
@@ -205,16 +290,6 @@ begin
   end;
 end;
 
-procedure TCefCustomBrowserProcessHandler.OnRenderProcessThreadCreated(const extraInfo: ICefListValue);
-begin
-  try
-    if (FCefApp <> nil) then FCefApp.Internal_OnRenderProcessThreadCreated(extraInfo);
-  except
-    on e : exception do
-      if CustomExceptionHandler('TCefCustomBrowserProcessHandler.OnRenderProcessThreadCreated', e) then raise;
-  end;
-end;
-
 procedure TCefCustomBrowserProcessHandler.OnScheduleMessagePumpWork(const delayMs: Int64);
 begin
   try
@@ -222,6 +297,16 @@ begin
   except
     on e : exception do
       if CustomExceptionHandler('TCefCustomBrowserProcessHandler.OnScheduleMessagePumpWork', e) then raise;
+  end;
+end;
+
+procedure TCefCustomBrowserProcessHandler.GetDefaultClient(var aClient : ICefClient);
+begin
+  try
+    if (FCefApp <> nil) then FCefApp.Internal_GetDefaultClient(aClient);
+  except
+    on e : exception do
+      if CustomExceptionHandler('TCefCustomBrowserProcessHandler.GetDefaultClient', e) then raise;
   end;
 end;
 

@@ -91,6 +91,7 @@ type
   TOnConsoleMessage               = procedure(Sender: TObject; const browser: ICefBrowser; level: TCefLogSeverity; const message, source: ustring; line: Integer; out Result: Boolean) of object;
   TOnAutoResize                   = procedure(Sender: TObject; const browser: ICefBrowser; const new_size: PCefSize; out Result: Boolean) of object;
   TOnLoadingProgressChange        = procedure(Sender: TObject; const browser: ICefBrowser; const progress: double) of object;
+  TOnCursorChange                 = procedure(Sender: TObject; const browser: ICefBrowser; cursor: TCefCursorHandle; cursorType: TCefCursorType; const customCursorInfo: PCefCursorInfo; var aResult : boolean) of Object;
 
   // ICefDownloadHandler
   TOnBeforeDownload               = procedure(Sender: TObject; const browser: ICefBrowser; const downloadItem: ICefDownloadItem; const suggestedName: ustring; const callback: ICefBeforeDownloadCallback) of object;
@@ -147,7 +148,6 @@ type
   TOnPopupSize                    = procedure(Sender: TObject; const browser: ICefBrowser; const rect: PCefRect) of Object;
   TOnPaint                        = procedure(Sender: TObject; const browser: ICefBrowser; type_: TCefPaintElementType; dirtyRectsCount: NativeUInt; const dirtyRects: PCefRectArray; const buffer: Pointer; width, height: Integer) of Object;
   TOnAcceleratedPaint             = procedure(Sender: TObject; const browser: ICefBrowser; type_: TCefPaintElementType; dirtyRectsCount: NativeUInt; const dirtyRects: PCefRectArray; shared_handle: Pointer) of Object;
-  TOnCursorChange                 = procedure(Sender: TObject; const browser: ICefBrowser; cursor: TCefCursorHandle; cursorType: TCefCursorType; const customCursorInfo: PCefCursorInfo) of Object;
   TOnStartDragging                = procedure(Sender: TObject; const browser: ICefBrowser; const dragData: ICefDragData; allowedOps: TCefDragOperations; x, y: Integer; out Result: Boolean) of Object;
   TOnUpdateDragCursor             = procedure(Sender: TObject; const browser: ICefBrowser; operation: TCefDragOperation) of Object;
   TOnScrollOffsetChanged          = procedure(Sender: TObject; const browser: ICefBrowser; x, y: Double) of Object;
@@ -203,7 +203,7 @@ type
   TOnPrefsAvailableEvent                   = procedure(Sender: TObject; aResultOK : boolean) of object;
   TOnCookiesDeletedEvent                   = procedure(Sender: TObject; numDeleted : integer) of object;
   TOnResolvedIPsAvailableEvent             = procedure(Sender: TObject; result: TCefErrorCode; const resolvedIps: TStrings) of object;
-  TOnNavigationVisitorResultAvailableEvent = procedure(const entry: ICefNavigationEntry; current: Boolean; index, total: Integer; var aResult : boolean) of object;
+  TOnNavigationVisitorResultAvailableEvent = procedure(Sender: TObject; const entry: ICefNavigationEntry; current: Boolean; index, total: Integer; var aResult : boolean) of object;
   TOnDownloadImageFinishedEvent            = procedure(Sender: TObject; const imageUrl: ustring; httpStatusCode: Integer; const image: ICefImage) of object;
   TOnExecuteTaskOnCefThread                = procedure(Sender: TObject; aTaskID : cardinal) of object;
   TOnCookiesVisited                        = procedure(Sender: TObject; const name_, value, domain, path: ustring; secure, httponly, hasExpires: Boolean; const creation, lastAccess, expires: TDateTime; count, total, aID : Integer; same_site : TCefCookieSameSite; priority : TCefCookiePriority; var aDeleteCookie, aResult : Boolean) of object;
@@ -213,7 +213,7 @@ type
   TOnMediaRouteCreateFinishedEvent         = procedure(Sender: TObject; result: TCefMediaRouterCreateResult; const error: ustring; const route: ICefMediaRoute) of object;
   TOnMediaSinkDeviceInfoEvent              = procedure(Sender: TObject; const ip_address: ustring; port: integer; const model_name: ustring) of object;
   {$IFDEF MSWINDOWS}
-  TOnCompMsgEvent                          = procedure(var aMessage: TMessage; var aHandled: Boolean) of object;
+  TOnCompMsgEvent                          = procedure(Sender: TObject; var aMessage: TMessage; var aHandled: Boolean) of object;
   {$ENDIF}
 
 implementation

@@ -207,6 +207,56 @@ type
       destructor  Destroy; override;
   end;
 
+  TCefBrowserNavigationTask = class(TCefTaskOwn)
+    protected
+      FEvents : Pointer;
+      FTask   : TCefBrowserNavigation;
+
+      procedure Execute; override;
+
+    public
+      constructor Create(const aEvents : IChromiumEvents; aTask : TCefBrowserNavigation); reintroduce;
+      destructor  Destroy; override;
+  end;
+
+  TCefUpdateSizeTask = class(TCefTaskOwn)
+    protected
+      FEvents : Pointer;
+      FLeft   : integer;
+      FTop    : integer;
+      FWidth  : integer;
+      FHeight : integer;
+
+      procedure Execute; override;
+
+    public
+      constructor Create(const aEvents : IChromiumEvents; aLeft, aTop, aWidth, aHeight : integer); reintroduce;
+      destructor  Destroy; override;
+  end;
+
+  TCefSendCaptureLostEventTask = class(TCefTaskOwn)
+    protected
+      FEvents : Pointer;
+
+      procedure Execute; override;
+
+    public
+      constructor Create(const aEvents : IChromiumEvents); reintroduce;
+      destructor  Destroy; override;
+  end;
+
+  TCefUpdateXWindowVisibilityTask = class(TCefTaskOwn)
+    protected
+      FEvents  : pointer;
+      FVisible : boolean;
+
+      procedure Execute; override;
+
+    public
+      constructor Create(const aEvents : IChromiumEvents; aVisible : boolean); reintroduce;
+      destructor  Destroy; override;
+  end;
+
 
 implementation
 
@@ -637,5 +687,136 @@ begin
 
   inherited Destroy;
 end;
+
+
+// TCefBrowserNavigationTask
+
+procedure TCefBrowserNavigationTask.Execute;
+begin
+  try
+    try
+      if (FEvents <> nil) then IChromiumEvents(FEvents).doBrowserNavigation(FTask);
+    except
+      on e : exception do
+        if CustomExceptionHandler('TCefBrowserNavigationTask.Execute', e) then raise;
+    end;
+  finally
+    FEvents := nil;
+  end;
+end;
+
+constructor TCefBrowserNavigationTask.Create(const aEvents : IChromiumEvents; aTask : TCefBrowserNavigation);
+begin
+  inherited Create;
+
+  FEvents := Pointer(aEvents);
+  FTask   := aTask;
+end;
+
+destructor TCefBrowserNavigationTask.Destroy;
+begin
+  FEvents := nil;
+
+  inherited Destroy;
+end;
+
+
+// TCefUpdateSizeTask
+
+procedure TCefUpdateSizeTask.Execute;
+begin
+  try
+    try
+      if (FEvents <> nil) then IChromiumEvents(FEvents).doUpdateSize(FLeft, FTop, FWidth, FHeight);
+    except
+      on e : exception do
+        if CustomExceptionHandler('TCefUpdateSizeTask.Execute', e) then raise;
+    end;
+  finally
+    FEvents := nil;
+  end;
+end;
+
+constructor TCefUpdateSizeTask.Create(const aEvents : IChromiumEvents; aLeft, aTop, aWidth, aHeight : integer);
+begin
+  inherited Create;
+
+  FEvents := Pointer(aEvents);
+  FLeft   := aLeft;
+  FTop    := aTop;
+  FWidth  := aWidth;
+  FHeight := aHeight;
+end;
+
+destructor TCefUpdateSizeTask.Destroy;
+begin
+  FEvents := nil;
+
+  inherited Destroy;
+end;
+
+
+// TCefSendCaptureLostEventTask
+
+procedure TCefSendCaptureLostEventTask.Execute;
+begin
+  try
+    try
+      if (FEvents <> nil) then IChromiumEvents(FEvents).doSendCaptureLostEvent;
+    except
+      on e : exception do
+        if CustomExceptionHandler('TCefSendCaptureLostEventTask.Execute', e) then raise;
+    end;
+  finally
+    FEvents := nil;
+  end;
+end;
+
+constructor TCefSendCaptureLostEventTask.Create(const aEvents : IChromiumEvents);
+begin
+  inherited Create;
+
+  FEvents := Pointer(aEvents);
+end;
+
+destructor TCefSendCaptureLostEventTask.Destroy;
+begin
+  FEvents := nil;
+
+  inherited Destroy;
+end;
+
+
+// TCefUpdateXWindowVisibilityTask
+
+procedure TCefUpdateXWindowVisibilityTask.Execute;
+begin
+  try
+    try
+      if (FEvents <> nil) then IChromiumEvents(FEvents).doUpdateXWindowVisibility(FVisible);
+    except
+      on e : exception do
+        if CustomExceptionHandler('TCefUpdateXWindowVisibilityTask.Execute', e) then raise;
+    end;
+  finally
+    FEvents := nil;
+  end;
+end;
+
+constructor TCefUpdateXWindowVisibilityTask.Create(const aEvents : IChromiumEvents; aVisible : boolean);
+begin
+  inherited Create;
+
+  FEvents  := Pointer(aEvents);
+  FVisible := aVisible;
+end;
+
+destructor TCefUpdateXWindowVisibilityTask.Destroy;
+begin
+  FEvents := nil;
+
+  inherited Destroy;
+end;
+
 
 end.

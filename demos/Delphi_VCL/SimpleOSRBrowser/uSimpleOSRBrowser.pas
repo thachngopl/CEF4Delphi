@@ -45,13 +45,13 @@ uses
   {$IFDEF DELPHI16_UP}
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes,
   System.SyncObjs, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls,
-  Vcl.ExtCtrls, Vcl.AppEvnts, WinApi.imm,
+  Vcl.ExtCtrls, Vcl.AppEvnts, WinApi.imm, Vcl.ComCtrls,
   {$ELSE}
   Windows, Messages, SysUtils, Variants, Classes, SyncObjs,
-  Graphics, Controls, Forms, Dialogs, StdCtrls, ExtCtrls, AppEvnts,
+  Graphics, Controls, Forms, Dialogs, StdCtrls, ExtCtrls, AppEvnts, ComCtrls,
   {$ENDIF}
   uCEFChromium, uCEFTypes, uCEFInterfaces, uCEFConstants, uCEFBufferPanel,
-  uCEFSentinel, uCEFChromiumCore;
+  uCEFChromiumCore;
 
 const
   // Set this constant to True and load "file://transparency.html" to test a
@@ -101,7 +101,7 @@ type
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
 
     procedure chrmosrPaint(Sender: TObject; const browser: ICefBrowser; kind: TCefPaintElementType; dirtyRectsCount: NativeUInt; const dirtyRects: PCefRectArray; const buffer: Pointer; width, height: Integer);
-    procedure chrmosrCursorChange(Sender: TObject; const browser: ICefBrowser; cursor: HICON; cursorType: TCefCursorType; const customCursorInfo: PCefCursorInfo);
+    procedure chrmosrCursorChange(Sender: TObject; const browser: ICefBrowser; cursor: HICON; cursorType: TCefCursorType; const customCursorInfo: PCefCursorInfo; var aResult : boolean);
     procedure chrmosrGetViewRect(Sender: TObject; const browser: ICefBrowser; var rect: TCefRect);
     procedure chrmosrGetScreenPoint(Sender: TObject; const browser: ICefBrowser; viewX, viewY: Integer; var screenX, screenY: Integer; out Result: Boolean);
     procedure chrmosrGetScreenInfo(Sender: TObject; const browser: ICefBrowser; var screenInfo: TCefScreenInfo; out Result: Boolean);
@@ -217,6 +217,22 @@ uses
 // the width and height of the buffer parameter, and the internal buffer size in
 // the TBufferPanel component.
 
+// **********************************************************************************************
+// ************************************** ATTENTION! ********************************************
+// **********************************************************************************************
+// *                                                                                            *
+// * If your Delphi/Lazarus version doesn't have full touch and pen support you will have       *
+// * issues building this demo.                                                                 *
+// *                                                                                            *
+// * Some constants and types like POINTER_INPUT_TYPE, POINTER_PEN_INFO, etc. need to be        *
+// * defined in order to test touch screens and pens on Windows.                                *
+// *                                                                                            *
+// * Try adding this unit made by Andreas Hausladen to the "uses" section if you get            *
+// * "Undeclared identifier" errors :                                                           *
+// * https://github.com/ahausladen/ObjectPascal-WinAPIs/blob/master/WinApi/WinApi.WMPointer.pas *
+// *                                                                                            *
+// **********************************************************************************************
+
 // This is the destruction sequence in OSR mode :
 // 1- FormCloseQuery sets CanClose to the initial FCanClose value (False) and
 //    calls chrmosr.CloseBrowser(True).
@@ -233,7 +249,7 @@ begin
   GlobalCEFApp.TouchEvents                := STATE_ENABLED;
   //GlobalCEFApp.EnableGPU                  := True;
   GlobalCEFApp.LogFile                    := 'debug.log';
-  GlobalCEFApp.LogSeverity                := LOGSEVERITY_INFO;
+  GlobalCEFApp.LogSeverity                := LOGSEVERITY_VERBOSE;
 
   // If you need transparency leave the GlobalCEFApp.BackgroundColor property
   // with the default value or set the alpha channel to 0
@@ -408,9 +424,11 @@ procedure TForm1.chrmosrCursorChange(      Sender           : TObject;
                                      const browser          : ICefBrowser;
                                            cursor           : HICON;
                                            cursorType       : TCefCursorType;
-                                     const customCursorInfo : PCefCursorInfo);
+                                     const customCursorInfo : PCefCursorInfo;
+                                     var   aResult          : boolean);
 begin
   Panel1.Cursor := CefCursorToWindowsCursor(cursorType);
+  aResult       := True;
 end;
 
 procedure TForm1.chrmosrGetScreenInfo(      Sender     : TObject;
@@ -697,6 +715,9 @@ end;
 
 procedure TForm1.FormAfterMonitorDpiChanged(Sender: TObject; OldDPI, NewDPI: Integer);
 begin
+  if (GlobalCEFApp <> nil) then
+    GlobalCEFApp.UpdateDeviceScaleFactor;
+
   if (chrmosr <> nil) then
     begin
       chrmosr.NotifyScreenInfoChanged;
